@@ -21,8 +21,8 @@ public static class LinkService
     public static async Task OpenExternalAsync(Uri uri, bool chooseApplication)
     {
         // Arbitrary URI handlers and executables in a document are never invoked.
-        if (!IsWeb(uri) && uri.Scheme != "mailto") throw new InvalidOperationException("Este tipo de enlace no se puede abrir desde el visor.");
+        if (!IsWeb(uri) && uri.Scheme != "mailto") throw new InvalidOperationException(Localization.Get("UnsupportedLink"));
         var opened = await Launcher.LaunchUriAsync(uri, new LauncherOptions { DisplayApplicationPicker = chooseApplication });
-        if (!opened) throw new InvalidOperationException("Windows no pudo abrir el enlace. Comprueba que haya un navegador registrado.");
+        if (!opened) throw new InvalidOperationException(Localization.Get("BrowserError"));
     }
 }

@@ -8,6 +8,7 @@ public sealed class ReaderSettings
     public bool RemoteImages { get; set; } = true;
     public double FontSize { get; set; } = 16;
     public string Theme { get; set; } = "Default";
+    public string Language { get; set; } = "auto";
     public bool NavigationOpen { get; set; } = true;
     public bool PromptForDefaultApp { get; set; } = true;
 

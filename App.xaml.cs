@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Amoxtli.Services;
 using Microsoft.Windows.AppLifecycle;
 using Windows.ApplicationModel.Activation;
 using Windows.Storage;
@@ -44,7 +45,7 @@ public partial class App : Application
                 }
             }
         }
-        catch (Exception ex) { await _window.ShowErrorAsync("No se pudo abrir el archivo", ex.Message); }
+        catch (Exception ex) { await _window.ShowErrorAsync(Localization.Get("OpenFileError"), ex.Message); }
         await _window.OfferDefaultAppAsync();
     }
 }

@@ -30,6 +30,30 @@ public sealed partial class MainWindow
         }
         try
         {
+            var oldLanguageSettings = JsonSerializer.Deserialize<ReaderSettings>("{\"Theme\":\"Dark\"}");
+            Check("Preferencias anteriores detectan el idioma de Windows", oldLanguageSettings?.Language == "auto");
+            Check("Idioma seleccionado se conserva en preferencias", JsonSerializer.Deserialize<ReaderSettings>(JsonSerializer.Serialize(new ReaderSettings { Language = "ja" }))?.Language == "ja");
+            Check("Resolución de idiomas regionales", Localization.ResolveLanguage("es-MX") == "es" && Localization.ResolveLanguage("pt-BR") == "pt" && Localization.ResolveLanguage("zh-CN") == "zh-Hans");
+            Check("Detección automática respeta el orden de Windows", Localization.ResolveLanguage("auto", ["nl-NL", "fr-CA", "en-US"]) == "fr");
+            Check("Idioma no compatible vuelve a inglés", Localization.ResolveLanguage("invalid-language") == "en" && Localization.ResolveLanguage("auto", ["nl-NL"]) == "en");
+            var baseline = Localization.GetCatalog("en");
+            foreach (var option in Localization.Languages)
+            {
+                var catalog = Localization.GetCatalog(option.Code);
+                Check($"Catálogo completo: {option.Code}", catalog.Count == baseline.Count && baseline.Keys.All(key => catalog.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)));
+                bool valid = true;
+                foreach (var (key, value) in catalog)
+                {
+                    var expected = System.Text.RegularExpressions.Regex.Matches(baseline[key], @"\{\d+(?::[^}]+)?\}").Select(m => m.Value).Order().ToArray();
+                    var actual = System.Text.RegularExpressions.Regex.Matches(value, @"\{\d+(?::[^}]+)?\}").Select(m => m.Value).Order().ToArray();
+                    valid &= expected.SequenceEqual(actual);
+                    try { _ = string.Format(System.Globalization.CultureInfo.GetCultureInfo(option.Code), value, 12, 3); }
+                    catch (FormatException) { valid = false; }
+                }
+                Check($"Formatos de traducción válidos: {option.Code}", valid);
+            }
+            _settings.Language = "es";
+            ApplyLanguage();
             var previousSettings = JsonSerializer.Deserialize<ReaderSettings>("{\"NavigationOpen\":false}");
             Check("Preferencias anteriores habilitan sugerencia de app predeterminada", previousSettings is { NavigationOpen: false, PromptForDefaultApp: true });
             var rememberedSettings = JsonSerializer.Deserialize<ReaderSettings>(JsonSerializer.Serialize(new ReaderSettings { PromptForDefaultApp = false }));
@@ -146,6 +170,28 @@ public sealed partial class MainWindow
             JumpToAnchor(headings[0].Id);
             Check("Navegación por anclas", ReaderScroll.Visibility == Visibility.Visible);
 
+            int languageHistory = _history.Count;
+            SearchBox.Text = "definición";
+            foreach (var option in Localization.Languages)
+            {
+                _settings.Language = option.Code;
+                ApplyLanguage();
+                DocumentPanel.UpdateLayout();
+                Check($"Cambio inmediato de interfaz: {option.Code}", Root.Children.OfType<MenuBar>().First().Items[0].Title == Localization.Get("MenuFile")
+                    && NavigationPivot.Items.OfType<PivotItem>().First().Header?.ToString() == Localization.Get("Files")
+                    && SearchBox.PlaceholderText == Localization.Get("Find") && SidebarMenu.Text == Localization.Get("Navigation"));
+                Check($"Documento e historial conservados: {option.Code}", _document?.Source == sample && SourceText.Text == sample && _history.Count == languageHistory && _matches.Count == 1 && SearchBox.Text == "definición");
+                Check($"Dirección de interfaz correcta: {option.Code}", Root.FlowDirection == (option.Code == "ar" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight)
+                    && DocumentPanel.FlowDirection == FlowDirection.LeftToRight && SourceText.FlowDirection == FlowDirection.LeftToRight);
+                var languageElements = Descendants(DocumentPanel).ToList();
+                Check($"Controles del lector traducidos: {option.Code}", languageElements.OfType<Button>().Any(button => Equals(button.Content, Localization.Get("Copy")))
+                    && _renderer!.Anchors.ContainsKey(headings[0].Id));
+                Check($"Guía del historial traducida: {option.Code}", _history.First(entry => entry.Document.Kind == DocumentKind.Welcome).Document.Source.StartsWith("# " + Localization.Get("WelcomeTitle")));
+            }
+            SearchBox.Text = "";
+            _settings.Language = "es";
+            ApplyLanguage();
+
             int previous = _historyIndex;
             Navigate(new ReadingDocument("# Segundo", null, "Segundo"), MarkdownService.Parse("# Segundo"));
             GoHistory(-1);
@@ -162,6 +208,13 @@ public sealed partial class MainWindow
             await OpenFileAsync(basePath);
             Check("Lectura real de archivo UTF-8", _document?.Path == basePath && _document.Source.Contains("Bienvenido a Amoxtli"));
             Check("Registro del vigilante de cambios", _watcher?.EnableRaisingEvents == true);
+            int folderItems = FileTree.RootNodes.Count;
+            _settings.Language = "en";
+            ApplyLanguage();
+            Check("Cambio de idioma conserva archivo y carpeta", _document?.Path == basePath && DocumentName.Text == "Welcome.md" && DocumentPath.Text == basePath
+                && FolderName.Text == "Assets" && FileTree.RootNodes.Count == folderItems && _watcher?.EnableRaisingEvents == true);
+            _settings.Language = "es";
+            ApplyLanguage();
 
             Image? InlineImage() => DocumentPanel.Children.OfType<RichTextBlock>()
                 .SelectMany(t => t.Blocks.OfType<Paragraph>()).SelectMany(p => p.Inlines.OfType<InlineUIContainer>())

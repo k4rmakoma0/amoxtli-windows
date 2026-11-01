@@ -37,7 +37,7 @@ internal static class DefaultAppService
         var uri = GetSettingsUri(GetCurrentAppId());
         if (await Launcher.LaunchUriAsync(uri)) return;
         if (uri.Query.Length > 0 && await Launcher.LaunchUriAsync(new Uri("ms-settings:defaultapps"))) return;
-        throw new InvalidOperationException("No se pudo abrir Configuración de Windows.");
+        throw new InvalidOperationException(Localization.Get("SettingsError"));
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]

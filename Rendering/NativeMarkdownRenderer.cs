@@ -70,7 +70,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
 
     private void AddBlock(StackPanel target, MdBlock block, int depth)
     {
-        if (depth > 40) { target.Children.Add(Code("Contenido demasiado anidado", "")); return; }
+        if (depth > 40) { target.Children.Add(Code(Localization.Get("TooNested"), "")); return; }
         switch (block)
         {
             case HeadingBlock heading:
@@ -106,7 +106,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
                     else
                     {
                         var check = new CheckBox { IsChecked = task.Checked, IsHitTestVisible = false, IsTabStop = false, MinWidth = 22, MinHeight = 24, Margin = new Thickness(0, 0, 0, 0) };
-                        AutomationProperties.SetName(check, task.Checked ? "Tarea completada" : "Tarea pendiente");
+                        AutomationProperties.SetName(check, task.Checked ? Localization.Get("TaskDone") : Localization.Get("TaskPending"));
                         row.Children.Add(check);
                     }
                     var body = new StackPanel();
@@ -126,11 +126,11 @@ public sealed class NativeMarkdownRenderer : IDisposable
             case FencedCodeBlock fenced:
                 target.Children.Add(Code(fenced.Lines.ToString(), fenced.Info ?? "")); break;
             case YamlFrontMatterBlock yaml:
-                target.Children.Add(Code(yaml.Lines.ToString(), "Metadatos YAML")); break;
+                target.Children.Add(Code(yaml.Lines.ToString(), Localization.Get("Yaml"))); break;
             case CodeBlock code:
                 target.Children.Add(Code(code.Lines.ToString(), "")); break;
             case HtmlBlock html:
-                target.Children.Add(Code(html.Lines.ToString(), "HTML · código fuente")); break;
+                target.Children.Add(Code(html.Lines.ToString(), Localization.Get("HtmlSource"))); break;
             case Table table:
                 target.Children.Add(RenderTable(table, depth)); break;
             case FootnoteGroup group:
@@ -175,7 +175,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
 
     private RichTextBlock Rich(ContainerInline? inline, double? size = null)
     {
-        var text = new RichTextBlock { FontSize = size ?? _font, Foreground = _foreground, IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap, LineHeight = (size ?? _font) * 1.55, Margin = new Thickness(0, 3, 0, 10) };
+        var text = new RichTextBlock { FontSize = size ?? _font, Foreground = _foreground, IsTextSelectionEnabled = true, TextReadingOrder = TextReadingOrder.DetectFromContent, TextAlignment = TextAlignment.DetectFromContent, TextWrapping = TextWrapping.Wrap, LineHeight = (size ?? _font) * 1.55, Margin = new Thickness(0, 3, 0, 10) };
         var paragraph = new Paragraph();
         var links = new List<(Hyperlink Link, string Url)>();
         AppendInlines(paragraph.Inlines, inline, links, text);
@@ -198,9 +198,9 @@ public sealed class NativeMarkdownRenderer : IDisposable
                     }
                 }
                 menu.Items.Add(new MenuFlyoutSeparator());
-                var copy = new MenuFlyoutItem { Text = "Copiar selección", IsEnabled = !string.IsNullOrEmpty(text.SelectedText) };
+                var copy = new MenuFlyoutItem { Text = Localization.Get("CopySelection"), IsEnabled = !string.IsNullOrEmpty(text.SelectedText) };
                 copy.Click += (_, _) => CopyText(text.SelectedText); menu.Items.Add(copy);
-                var select = new MenuFlyoutItem { Text = "Seleccionar todo el bloque" };
+                var select = new MenuFlyoutItem { Text = Localization.Get("SelectBlock") };
                 select.Click += (_, _) => text.SelectAll(); menu.Items.Add(select);
                 return menu;
             }
@@ -301,10 +301,10 @@ public sealed class NativeMarkdownRenderer : IDisposable
             item.Click += async (_, _) => { try { await _openLink(url, choose); } catch (Exception ex) { _report(ex.Message); } };
             menu.Items.Add(item);
         }
-        Item("Abrir enlace", false);
+        Item(Localization.Get("OpenLink"), false);
         var resolved = LinkService.Resolve(url, _path);
-        if (resolved is not null && LinkService.IsWeb(resolved)) Item("Abrir con…", true);
-        var copy = new MenuFlyoutItem { Text = "Copiar dirección del enlace" };
+        if (resolved is not null && LinkService.IsWeb(resolved)) Item(Localization.Get("OpenWith"), true);
+        var copy = new MenuFlyoutItem { Text = Localization.Get("CopyLink") };
         copy.Click += (_, _) => CopyText(resolved?.AbsoluteUri ?? url);
         menu.Items.Add(copy);
         return menu;
@@ -317,8 +317,8 @@ public sealed class NativeMarkdownRenderer : IDisposable
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var header = new Grid();
         header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.Children.Add(new TextBlock { Text = string.IsNullOrWhiteSpace(language) ? "Código" : language, FontSize = 12, Foreground = _secondary, VerticalAlignment = VerticalAlignment.Center });
-        var copy = new Button { Content = "Copiar", Padding = new Thickness(10, 3, 10, 3), FontSize = 12 };
+        header.Children.Add(new TextBlock { Text = string.IsNullOrWhiteSpace(language) ? Localization.Get("Code") : language, FontSize = 12, Foreground = _secondary, VerticalAlignment = VerticalAlignment.Center });
+        var copy = new Button { Content = Localization.Get("Copy"), Padding = new Thickness(10, 3, 10, 3), FontSize = 12 };
         copy.Click += (_, _) => CopyText(code);
         Grid.SetColumn(copy, 1); header.Children.Add(copy); panel.Children.Add(header);
         var text = new TextBlock { Text = code, IsTextSelectionEnabled = true, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = _font * .88, TextWrapping = TextWrapping.NoWrap, Foreground = _foreground, Padding = new Thickness(0, 4, 0, 8) };
@@ -374,7 +374,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
         string alt = MarkdownService.PlainText(imageLink);
         string address = imageLink.GetDynamicUrl?.Invoke() ?? imageLink.Url ?? "";
         var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 12), Spacing = 6 };
-        var caption = new TextBlock { Text = string.IsNullOrEmpty(alt) ? "Imagen" : alt, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = _secondary };
+        var caption = new TextBlock { Text = string.IsNullOrEmpty(alt) ? Localization.Get("Image") : alt, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = _secondary };
         var image = new Image { Stretch = Stretch.Uniform, MaxHeight = 600, HorizontalAlignment = HorizontalAlignment.Left, Visibility = Visibility.Collapsed };
         var uri = LinkService.Resolve(address, _path);
         void Resize() { panel.MaxWidth = Math.Max(80, Math.Min(700, _host.ActualWidth - 110)); image.MaxWidth = panel.MaxWidth; caption.MaxWidth = panel.MaxWidth; }
@@ -382,12 +382,12 @@ public sealed class NativeMarkdownRenderer : IDisposable
         SizeChangedEventHandler onResize = (_, _) => Resize();
         _host.SizeChanged += onResize;
         _lifetime.Token.Register(() => _host.SizeChanged -= onResize);
-        AutomationProperties.SetName(image, string.IsNullOrEmpty(alt) ? "Imagen del documento" : alt);
+        AutomationProperties.SetName(image, string.IsNullOrEmpty(alt) ? Localization.Get("DocumentImage") : alt);
         ToolTipService.SetToolTip(image, imageLink.Title ?? address);
         panel.Children.Add(image); panel.Children.Add(caption);
-        if (uri is null) caption.Text += " · no se pudo resolver la ruta";
-        else if (LinkService.IsWeb(uri) && !_settings.RemoteImages) caption.Text += " · imagen remota desactivada";
-        else if (uri.IsUnc || (!uri.IsFile && !LinkService.IsWeb(uri))) caption.Text += " · dirección de imagen no compatible";
+        if (uri is null) caption.Text += " · " + Localization.Get("UnresolvedImage");
+        else if (LinkService.IsWeb(uri) && !_settings.RemoteImages) caption.Text += " · " + Localization.Get("RemoteImageDisabled");
+        else if (uri.IsUnc || (!uri.IsFile && !LinkService.IsWeb(uri))) caption.Text += " · " + Localization.Get("UnsupportedImage");
         else _ = LoadImageAsync(uri, image, caption);
         return panel;
     }
@@ -408,21 +408,21 @@ public sealed class NativeMarkdownRenderer : IDisposable
             if (uri.IsFile)
             {
                 await using var file = File.OpenRead(uri.LocalPath);
-                if (file.Length > limit) throw new InvalidDataException("la imagen supera 15 MB");
+                if (file.Length > limit) throw new InvalidDataException(Localization.Get("ImageTooLarge"));
                 await file.CopyToAsync(memory, token);
             }
             else
             {
                 using var response = await Http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, token);
                 response.EnsureSuccessStatusCode();
-                if (response.Content.Headers.ContentLength > limit) throw new InvalidDataException("la imagen supera 15 MB");
+                if (response.Content.Headers.ContentLength > limit) throw new InvalidDataException(Localization.Get("ImageTooLarge"));
                 svg |= response.Content.Headers.ContentType?.MediaType == "image/svg+xml";
                 await using var input = await response.Content.ReadAsStreamAsync(token);
                 var buffer = new byte[81920];
                 int read;
                 while ((read = await input.ReadAsync(buffer, token)) > 0)
                 {
-                    if (memory.Length + read > limit) throw new InvalidDataException("la imagen supera 15 MB");
+                    if (memory.Length + read > limit) throw new InvalidDataException(Localization.Get("ImageTooLarge"));
                     await memory.WriteAsync(buffer.AsMemory(0, read), token);
                 }
             }
@@ -431,7 +431,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
             {
                 var source = new SvgImageSource();
                 var status = await source.SetSourceAsync(memory.AsRandomAccessStream());
-                if (status != SvgImageSourceLoadStatus.Success) throw new InvalidDataException("SVG no compatible");
+                if (status != SvgImageSourceLoadStatus.Success) throw new InvalidDataException(Localization.Get("UnsupportedSvg"));
                 image.Source = source;
             }
             else
@@ -441,8 +441,8 @@ public sealed class NativeMarkdownRenderer : IDisposable
             }
             if (!token.IsCancellationRequested) image.Visibility = Visibility.Visible;
         }
-        catch (OperationCanceledException) { if (!_lifetime.IsCancellationRequested) caption.Text += " · se agotó el tiempo de carga"; }
-        catch (Exception ex) { if (!token.IsCancellationRequested) caption.Text += $" · no se pudo cargar ({ex.Message})"; }
+        catch (OperationCanceledException) { if (!_lifetime.IsCancellationRequested) caption.Text += " · " + Localization.Get("ImageTimeout"); }
+        catch (Exception ex) { if (!token.IsCancellationRequested) caption.Text += " · " + Localization.Format("ImageError", ex.Message); }
         finally { if (entered) _imageSlots.Release(); }
     }
 
@@ -481,7 +481,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
     private void CopyText(string text)
     {
         try { var data = new DataPackage(); data.SetText(text); Clipboard.SetContent(data); }
-        catch (Exception ex) { _report($"No se pudo copiar: {ex.Message}"); }
+        catch (Exception ex) { _report(Localization.Format("CopyError", ex.Message)); }
     }
 
     private static string FootnoteLabel(Footnote footnote) => footnote.Label?.TrimStart('^') ?? footnote.Order.ToString();

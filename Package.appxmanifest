@@ -35,7 +35,7 @@
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
         DisplayName="Amoxtli"
-        Description="Visor nativo de archivos Markdown"
+        Description="ms-resource:AppDescription"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Amoxtli.Square150x150Logo.png"
         Square44x44Logo="Assets\Amoxtli.Square44x44Logo.png">
@@ -45,7 +45,7 @@
       <Extensions>
         <uap:Extension Category="windows.fileTypeAssociation">
           <uap:FileTypeAssociation Name="amoxtli.markdown">
-            <uap:DisplayName>Documento Markdown</uap:DisplayName>
+            <uap:DisplayName>ms-resource:MarkdownDocument</uap:DisplayName>
             <uap:Logo>Assets\Amoxtli.Square44x44Logo.png</uap:Logo>
             <uap:SupportedFileTypes>
               <uap:FileType>.md</uap:FileType>

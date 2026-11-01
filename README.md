@@ -14,6 +14,8 @@ Visor de Markdown de solo lectura para Windows, escrito en C# y **WinUI 3**. Tan
 - Búsqueda por bloques con resaltado y navegación, vista de código fuente, tamaño de texto, tema de Windows/claro/oscuro y progreso de lectura.
 - Recarga automática del archivo abierto cuando cambia en disco y recarga manual con F5.
 - Botón en la barra de herramientas para mostrar u ocultar el panel de navegación, también con Ctrl+B.
+- Interfaz y guía de bienvenida en español, inglés, portugués, francés, alemán, italiano, ruso, chino simplificado, japonés, coreano, árabe e hindi. El idioma de Windows se detecta automáticamente, con inglés como alternativa para idiomas no compatibles.
+- Selector de idioma en **Preferencias de lectura**, con cambios inmediatos y persistentes. La interfaz se adapta de derecha a izquierda para árabe; los documentos y el código fuente conservan su contenido y dirección.
 
 ## Ejecutar
 
@@ -66,6 +68,6 @@ Estas pruebas ejecutan la aplicación en un dispatcher real de WinUI y revisan e
 - El árbol omite archivos/carpetas ocultos, del sistema y puntos de reanálisis. F5 actualiza la lista de archivos. Los documentos abiertos desde el Explorador crean ventanas independientes.
 - Las preferencias se guardan en la carpeta local de datos de la aplicación, en `Amoxtli\settings.json`.
 
-La guía incorporada está en `Assets\Welcome.md`. El parser Markdig se distribuye bajo BSD-2-Clause; consulta `THIRD-PARTY-NOTICES.md`.
+La guía de bienvenida usa el idioma seleccionado. Los catálogos están en `Localization` y la referencia ampliada en español se conserva en `Assets\Welcome.md`. El parser Markdig se distribuye bajo BSD-2-Clause; consulta `THIRD-PARTY-NOTICES.md`.
 
 El icono combina el símbolo de Markdown con un códice plegado de inspiración mesoamericana. El original transparente y el prompt de ImageGen están en `Assets\Branding`; `scripts\Build-IconAssets.ps1` genera el ICO y los recursos de Windows. El icono está configurado para el ejecutable, la ventana, el paquete y las asociaciones de archivos.
