@@ -15,7 +15,7 @@ Visor de Markdown de solo lectura para Windows, escrito en C# y **WinUI 3**. Tan
 - Recarga automática del archivo abierto cuando cambia en disco y recarga manual con F5.
 - Botón en la barra de herramientas para mostrar u ocultar el panel de navegación, también con Ctrl+B.
 - Interfaz y guía de bienvenida en español, inglés, portugués, francés, alemán, italiano, ruso, chino simplificado, japonés, coreano, árabe e hindi. El idioma de Windows se detecta automáticamente, con inglés como alternativa para idiomas no compatibles.
-- Selector de idioma en **Preferencias de lectura**, con cambios inmediatos y persistentes. La interfaz se adapta de derecha a izquierda para árabe; los documentos y el código fuente conservan su contenido y dirección.
+- Selector de idioma en **Preferencias de lectura**, con vista previa inmediata dentro del diálogo. **Guardar** aplica el idioma a toda la app y conserva la elección; **Cancelar** descarta los ajustes pendientes. La interfaz se adapta de derecha a izquierda para árabe; los documentos y el código fuente conservan su contenido y dirección.
 
 ## Ejecutar
 

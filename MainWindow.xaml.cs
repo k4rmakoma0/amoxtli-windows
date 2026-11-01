@@ -1,4 +1,5 @@
 using Amoxtli.Models;
+using Amoxtli.Controls;
 using Amoxtli.Rendering;
 using Amoxtli.Services;
 using Microsoft.UI.Dispatching;
@@ -567,29 +568,13 @@ public sealed partial class MainWindow : Window
     private async void Settings_Click(object sender, RoutedEventArgs e)
     {
         if (_dialogOpen) return;
-        var remote = new ToggleSwitch { Header = Localization.Get("RemoteImages"), OnContent = Localization.Get("On"), OffContent = Localization.Get("Off"), IsOn = _settings.RemoteImages };
-        var theme = new ComboBox { Header = Localization.Get("Theme"), HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = new[] { Localization.Get("SystemTheme"), Localization.Get("Light"), Localization.Get("Dark") }, SelectedIndex = _settings.Theme == "Light" ? 1 : _settings.Theme == "Dark" ? 2 : 0 };
-        var languages = new[] { new LanguageOption("auto", Localization.Get("SystemLanguage")) }.Concat(Localization.Languages).ToList();
-        var language = new ComboBox { Header = Localization.Get("Language"), HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = languages, DisplayMemberPath = nameof(LanguageOption.NativeName), SelectedItem = languages.FirstOrDefault(item => item.Code == _settings.Language) ?? languages[0] };
-        language.FlowDirection = FlowDirection.LeftToRight;
-        var size = new Slider { Header = Localization.Get("FontSize"), Minimum = 12, Maximum = 28, StepFrequency = 1, Value = _settings.FontSize };
-        var defaultAppPrompt = new CheckBox { Content = new TextBlock { Text = Localization.Get("DefaultAppPrompt"), TextWrapping = TextWrapping.Wrap }, IsChecked = _settings.PromptForDefaultApp };
-        var panel = new StackPanel { Spacing = 20, MinWidth = 320 };
-        panel.Children.Add(language);
-        panel.Children.Add(remote);
-        panel.Children.Add(new TextBlock { Text = Localization.Get("RemoteImagesHelp"), TextWrapping = TextWrapping.Wrap, MaxWidth = 400, FontSize = 12 });
-        panel.Children.Add(theme); panel.Children.Add(size);
-        panel.Children.Add(defaultAppPrompt);
-        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, FlowDirection = Root.FlowDirection, Title = Localization.Get("Preferences"), Content = panel, PrimaryButtonText = Localization.Get("Save"), CloseButtonText = Localization.Get("Cancel"), DefaultButton = ContentDialogButton.Primary };
+        var dialog = new ReadingPreferencesDialog(_settings) { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme };
         _dialogOpen = true;
         try
         {
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
-                _settings.RemoteImages = remote.IsOn; _settings.FontSize = size.Value;
-                _settings.Theme = theme.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "Default" };
-                _settings.PromptForDefaultApp = defaultAppPrompt.IsChecked == true;
-                _settings.Language = (language.SelectedItem as LanguageOption)?.Code ?? "auto";
+                dialog.ApplyTo(_settings);
                 SaveSettings(); ApplyTheme(); ApplyLanguage();
             }
         }

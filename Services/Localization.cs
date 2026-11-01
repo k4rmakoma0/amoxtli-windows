@@ -66,7 +66,9 @@ public static class Localization
         return catalog;
     }
 
-    public static string Get(string key) => GetCatalog(CurrentLanguage).TryGetValue(key, out var value)
+    public static string Get(string key) => Get(key, CurrentLanguage);
+    // Read a catalog without changing the active app language, for dialog previews.
+    internal static string Get(string key, string language) => GetCatalog(language).TryGetValue(key, out var value)
         ? value : GetCatalog("en").TryGetValue(key, out var fallback) ? fallback : key;
     public static string Format(string key, params object[] args) => string.Format(Culture, Get(key), args);
     public static string Percent(double value) => value.ToString("P0", Culture);

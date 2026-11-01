@@ -1,5 +1,6 @@
 #if DEBUG
 using Amoxtli.Services;
+using Amoxtli.Controls;
 using Markdig.Extensions.Footnotes;
 using Markdig.Extensions.DefinitionLists;
 using Markdig.Extensions.Tables;
@@ -54,6 +55,44 @@ public sealed partial class MainWindow
             }
             _settings.Language = "es";
             ApplyLanguage();
+            var previewSettings = new ReaderSettings { Language = "es", Theme = "Light", RemoteImages = true, FontSize = 17, PromptForDefaultApp = true };
+            var preferences = new ReadingPreferencesDialog(previewSettings);
+            preferences.ThemePicker.SelectedIndex = 2;
+            preferences.RemoteImages.IsOn = false;
+            preferences.TextSize.Value = 23;
+            preferences.DefaultAppPrompt.IsChecked = false;
+            string appLanguage = Localization.CurrentLanguage;
+            string appMenu = Root.Children.OfType<MenuBar>().First().Items[0].Title;
+            foreach (var option in Localization.Languages)
+            {
+                preferences.LanguagePicker.SelectedItem = ((IEnumerable<LanguageOption>)preferences.LanguagePicker.ItemsSource).First(item => item.Code == option.Code);
+                string DialogText(string key) => Localization.Get(key, option.Code);
+                Check($"Vista previa de configuración inmediata: {option.Code}", preferences.Title?.ToString() == DialogText("Preferences")
+                    && preferences.PrimaryButtonText == DialogText("Save") && preferences.CloseButtonText == DialogText("Cancel")
+                    && preferences.LanguagePicker.Header?.ToString() == DialogText("Language") && preferences.ThemePicker.Header?.ToString() == DialogText("Theme")
+                    && preferences.RemoteImages.Header?.ToString() == DialogText("RemoteImages") && preferences.RemoteImages.OnContent?.ToString() == DialogText("On")
+                    && preferences.RemoteImages.OffContent?.ToString() == DialogText("Off") && preferences.TextSize.Header?.ToString() == DialogText("FontSize")
+                    && (preferences.DefaultAppPrompt.Content as TextBlock)?.Text == DialogText("DefaultAppPrompt"));
+                Check($"Vista previa conserva opciones pendientes: {option.Code}", preferences.ThemePicker.SelectedIndex == 2 && !preferences.RemoteImages.IsOn
+                    && preferences.TextSize.Value == 23 && preferences.DefaultAppPrompt.IsChecked == false
+                    && (preferences.LanguagePicker.SelectedItem as LanguageOption)?.Code == option.Code);
+                Check($"Vista previa no modifica app ni preferencias: {option.Code}", Localization.CurrentLanguage == appLanguage
+                    && Root.Children.OfType<MenuBar>().First().Items[0].Title == appMenu
+                    && previewSettings is { Language: "es", Theme: "Light", RemoteImages: true, FontSize: 17, PromptForDefaultApp: true });
+                Check($"Dirección de vista previa correcta: {option.Code}", preferences.FlowDirection == (option.Code == "ar" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight));
+            }
+            preferences.LanguagePicker.SelectedItem = ((IEnumerable<LanguageOption>)preferences.LanguagePicker.ItemsSource).First(item => item.Code == "auto");
+            string automaticLanguage = Localization.ResolveLanguage("auto");
+            Check("Vista previa de idioma automático mantiene selección", (preferences.LanguagePicker.SelectedItem as LanguageOption)?.Code == "auto"
+                && preferences.Title?.ToString() == Localization.Get("Preferences", automaticLanguage)
+                && ((IEnumerable<LanguageOption>)preferences.LanguagePicker.ItemsSource).First().NativeName == Localization.Get("SystemLanguage", automaticLanguage));
+            var reopenedPreferences = new ReadingPreferencesDialog(previewSettings);
+            Check("Descartar vista previa conserva preferencias originales", (reopenedPreferences.LanguagePicker.SelectedItem as LanguageOption)?.Code == "es"
+                && reopenedPreferences.ThemePicker.SelectedIndex == 1 && reopenedPreferences.RemoteImages.IsOn && reopenedPreferences.TextSize.Value == 17
+                && reopenedPreferences.DefaultAppPrompt.IsChecked == true && Localization.CurrentLanguage == appLanguage);
+            preferences.LanguagePicker.SelectedItem = ((IEnumerable<LanguageOption>)preferences.LanguagePicker.ItemsSource).First(item => item.Code == "en");
+            preferences.ApplyTo(previewSettings);
+            Check("Guardar aplica idioma y opciones de la vista previa", previewSettings is { Language: "en", Theme: "Dark", RemoteImages: false, FontSize: 23, PromptForDefaultApp: false });
             var previousSettings = JsonSerializer.Deserialize<ReaderSettings>("{\"NavigationOpen\":false}");
             Check("Preferencias anteriores habilitan sugerencia de app predeterminada", previousSettings is { NavigationOpen: false, PromptForDefaultApp: true });
             var rememberedSettings = JsonSerializer.Deserialize<ReaderSettings>(JsonSerializer.Serialize(new ReaderSettings { PromptForDefaultApp = false }));
