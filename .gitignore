@@ -1,0 +1,8 @@
+bin/
+obj/
+artifacts/
+AppPackages/
+.vs/
+*.csproj.user
+*.pfx
+*.cer

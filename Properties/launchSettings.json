@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Amoxtli (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Amoxtli (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
