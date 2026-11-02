@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window
     private string? _folderPath;
     private ReadingDocument? _document;
     private NativeMarkdownRenderer? _renderer;
-    private TextBlock? SourceText => SourceScroll.Content as TextBlock;
+    public TextBlock? SourceText => SourceScroll.Content as TextBlock;
     private FileSystemWatcher? _watcher;
     private DispatcherQueueTimer? _reloadTimer;
     private List<FrameworkElement> _matches = [];
