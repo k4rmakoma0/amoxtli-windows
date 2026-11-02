@@ -21,6 +21,8 @@
     <PackageReference Include="Markdig" Version="0.41.3" />
     <Content Include="Assets\Welcome.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="PRIVACY.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Amoxtli.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Amoxtli.*.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\SplashScreen.scale-200.png" />

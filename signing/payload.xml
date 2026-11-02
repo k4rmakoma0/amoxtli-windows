@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters><parameter name="version" required="true" /></parameters>
+  <zip-file>
+    <directory path="app">
+      <pe-file path="Amoxtli.exe" product-name="Amoxtli" product-version="${version}"><authenticode-sign /></pe-file>
+      <pe-file path="Amoxtli.dll" product-name="Amoxtli" product-version="${version}"><authenticode-sign /></pe-file>
+    </directory>
+    <directory path="uninstaller">
+      <pe-file path="Amoxtli-uninstaller.exe" product-name="Amoxtli" product-version="${version}"><authenticode-sign /></pe-file>
+    </directory>
+  </zip-file>
+</artifact-configuration>

@@ -2,6 +2,8 @@
 
 Visor de Markdown de solo lectura para Windows, escrito en C# y **WinUI 3**. Tanto la interfaz como el documento usan controles nativos (`RichTextBlock`, `Grid`, `TreeView`, etc.); no se utiliza WebView para presentar el contenido.
 
+Licencia [MIT](LICENSE) · [Privacidad en Windows](PRIVACY.md) · [Code signing policy](CODE_SIGNING.md)
+
 ## Funciones
 
 - Abrir archivos y carpetas, arrastrarlos a la ventana y recorrer subcarpetas bajo demanda.
@@ -38,7 +40,7 @@ El script compila una versión x64 autocontenida en `artifacts\dev` y abre la ap
 
 ## App predeterminada de Markdown
 
-`Package.appxmanifest` declara las asociaciones de las cinco extensiones. **La asociación requiere instalar o registrar el paquete MSIX**; ejecutar el `.exe` sin paquete no registra extensiones.
+`Package.appxmanifest` declara las asociaciones de las cinco extensiones para Microsoft Store/MSIX. El instalador de GitHub también puede registrar esas extensiones en **Abrir con** y en Aplicaciones predeterminadas, sin sustituir la elección del usuario. Ejecutar el `.exe` portable sin instalar no registra extensiones.
 
 Después de instalarlo, usa **Archivo → Elegir como app predeterminada…**, busca Amoxtli o cada extensión en Configuración de Windows y elige la aplicación. También puedes usar **Abrir con → Elegir otra aplicación** desde el Explorador. Windows conserva el control de esta elección; la app no cambia asociaciones en el registro.
 
@@ -49,6 +51,27 @@ Para generar un paquete sin firma, que después debes firmar con tu certificado 
 ```powershell
 dotnet build Amoxtli.csproj -c Release -p:Platform=x64 -p:GenerateAppxPackageOnBuild=true -p:AppxPackageSigningEnabled=false -p:AppxBundle=Never
 ```
+
+## Instalador para GitHub Releases
+
+Para generar el instalador x64 necesitas el SDK de .NET y las herramientas de Windows indicadas arriba, además de [Inno Setup 6.3 o posterior](https://jrsoftware.org/isdl.php). El compilador se detecta en las rutas habituales, en `PATH` o en `artifacts\tools\innosetup`; también puedes indicar su ruta con `-CompilerPath`.
+
+```powershell
+.\scripts\Build-Installer.ps1
+# Para publicar otra versión:
+.\scripts\Build-Installer.ps1 -Version 1.0.1
+```
+
+Sin `-Version`, usa los tres primeros componentes de la versión de `Package.appxmanifest`. Genera estos dos archivos para adjuntarlos a la release correspondiente:
+
+- `artifacts\releases\Amoxtli-1.0.0-windows-x64-setup.exe`
+- `artifacts\releases\Amoxtli-1.0.0-windows-x64-setup.exe.sha256`
+
+El instalador funciona en Windows 10 1809 o posterior compatible con x64, instala para el usuario actual en `%LOCALAPPDATA%\Programs\Amoxtli` y añade un acceso al menú Inicio y un desinstalador. El acceso al escritorio es opcional. La interfaz del instalador está disponible en español e inglés; la app conserva sus 12 idiomas.
+
+La distribución incluye .NET y Windows App SDK, así que no necesita Microsoft Store ni la instalación previa de esos runtimes. Usa una publicación Release sin recorte ni empaquetado MSIX; el proceso de Store queda desactivado solo para esta compilación. Las actualizaciones se instalan ejecutando el nuevo instalador sobre la versión anterior. La desinstalación conserva las preferencias del lector.
+
+Por defecto, el instalador se genera **sin firma Authenticode**. Windows puede mostrar un aviso de editor desconocido al descargarlo. El SHA-256 permite comprobar la integridad del archivo, pero no sustituye esa firma. El flujo de firma gratuita con SignPath está preparado y requiere la aprobación del proyecto; consulta la [Code signing policy](CODE_SIGNING.md) y la [guía de configuración](signing/README.md). La preparación del flujo no implica que los binarios actuales ya estén firmados.
 
 ## Validación
 
