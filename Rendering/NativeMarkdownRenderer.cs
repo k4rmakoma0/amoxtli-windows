@@ -37,7 +37,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
     private readonly Func<string, bool, Task> _openLink;
     private readonly Action<string> _report;
     private readonly CancellationTokenSource _lifetime = new();
-    private readonly SemaphoreSlim _imageSlots = new(4);
+    private readonly SemaphoreSlim _imageSlots;
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 5 }) { Timeout = TimeSpan.FromSeconds(20) };
     private readonly List<(FrameworkElement Element, string Text)> _searchable = [];
     private readonly Dictionary<string, FrameworkElement> _anchors = new(StringComparer.OrdinalIgnoreCase);
@@ -47,10 +47,13 @@ public sealed class NativeMarkdownRenderer : IDisposable
     private readonly Brush _secondary;
     private readonly Brush _stroke;
     private readonly Brush _subtle;
-    public IReadOnlyDictionary<string, FrameworkElement> Anchors => _anchors;
+    private bool _disposed;
+    private VirtualMarkdownDocument? _virtualDocument;
+    public IReadOnlyDictionary<string, FrameworkElement> Anchors => _virtualDocument?.Anchors ?? _anchors;
 
-    public NativeMarkdownRenderer(StackPanel host, ReaderSettings settings, string? path, Func<string, bool, Task> openLink, Action<string> report)
+    public NativeMarkdownRenderer(StackPanel host, ReaderSettings settings, string? path, Func<string, bool, Task> openLink, Action<string> report, SemaphoreSlim? imageSlots = null)
     {
+        _imageSlots = imageSlots ?? new(4);
         _host = host; _settings = settings; _path = path; _openLink = openLink; _report = report; _font = settings.FontSize;
         bool dark = host.ActualTheme == ElementTheme.Dark;
         bool highContrast = new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast;
@@ -65,8 +68,19 @@ public sealed class NativeMarkdownRenderer : IDisposable
     public void Render(MarkdownDocument document)
     {
         _host.Children.Clear();
+        if (document.Count > 300 || document.Sum(block => (long)Math.Max(0, block.Span.End - block.Span.Start + 1)) > 512 * 1024)
+        {
+            _virtualDocument = new VirtualMarkdownDocument(_host, document,
+                panel => new NativeMarkdownRenderer(panel, _settings, _path, _openLink, _report, _imageSlots));
+            return;
+        }
         foreach (var block in document) AddBlock(_host, block, 0);
     }
+
+    internal void RenderBlock(MdBlock block) => AddBlock(_host, block, 0);
+    public FrameworkElement PrepareForNavigation(FrameworkElement element) => _virtualDocument?.PrepareForNavigation(element) ?? element;
+    public FrameworkElement? ResolveAnchor(string id) => _virtualDocument is not null ? _virtualDocument.ResolveAnchor(id)
+        : _anchors.GetValueOrDefault(id);
 
     private void AddBlock(StackPanel target, MdBlock block, int depth)
     {
@@ -448,6 +462,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
 
     public List<FrameworkElement> Search(string query)
     {
+        if (_virtualDocument is not null) return _virtualDocument.Search(query);
         var matches = new List<FrameworkElement>();
         foreach (var (element, text) in _searchable)
         {
@@ -486,5 +501,33 @@ public sealed class NativeMarkdownRenderer : IDisposable
 
     private static string FootnoteLabel(Footnote footnote) => footnote.Label?.TrimStart('^') ?? footnote.Order.ToString();
 
-    public void Dispose() { _lifetime.Cancel(); _lifetime.Dispose(); }
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _lifetime.Cancel();
+        _virtualDocument?.Dispose();
+        _virtualDocument = null;
+        // Detaching a control is not enough: WinUI's native text/layout state can outlive
+        // its managed wrapper. Release document content before dropping the visual tree.
+        foreach (var (element, _) in _searchable)
+        {
+            if (element is RichTextBlock rich)
+            {
+                rich.ContextFlyout = null;
+                rich.TextHighlighters.Clear();
+                rich.Blocks.Clear();
+            }
+            else if (element is TextBlock text)
+            {
+                text.TextHighlighters.Clear();
+                text.Text = "";
+            }
+        }
+        _host.Children.Clear();
+        _searchable.Clear();
+        _anchors.Clear();
+        _links.Clear();
+        _lifetime.Dispose();
+    }
 }

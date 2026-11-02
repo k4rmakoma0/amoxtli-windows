@@ -204,8 +204,12 @@ public sealed partial class MainWindow
             Check("Búsqueda limpia resaltados", richBlocks.All(t => t.TextHighlighters.Count == 0));
 
             SetSource(true);
-            Check("Vista fuente", SourceScroll.Visibility == Visibility.Visible && SourceText.Text == sample);
+            Check("Vista fuente", SourceScroll.Visibility == Visibility.Visible && SourceText?.Text == sample);
+            RenderCurrent(true);
+            Check("Vista fuente conserva documento al volver a renderizar", SourceText?.Text == sample);
+            var previousSourceText = SourceText;
             SetSource(false);
+            Check("Ocultar fuente libera el control y su texto", SourceScroll.Content is null && previousSourceText?.Text == "");
             JumpToAnchor(headings[0].Id);
             Check("Navegación por anclas", ReaderScroll.Visibility == Visibility.Visible);
 
@@ -219,9 +223,9 @@ public sealed partial class MainWindow
                 Check($"Cambio inmediato de interfaz: {option.Code}", Root.Children.OfType<MenuBar>().First().Items[0].Title == Localization.Get("MenuFile")
                     && NavigationPivot.Items.OfType<PivotItem>().First().Header?.ToString() == Localization.Get("Files")
                     && SearchBox.PlaceholderText == Localization.Get("Find") && SidebarMenu.Text == Localization.Get("Navigation"));
-                Check($"Documento e historial conservados: {option.Code}", _document?.Source == sample && SourceText.Text == sample && _history.Count == languageHistory && _matches.Count == 1 && SearchBox.Text == "definición");
+                Check($"Documento e historial conservados: {option.Code}", _document?.Source == sample && SourceScroll.Content is null && _history.Count == languageHistory && _matches.Count == 1 && SearchBox.Text == "definición");
                 Check($"Dirección de interfaz correcta: {option.Code}", Root.FlowDirection == (option.Code == "ar" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight)
-                    && DocumentPanel.FlowDirection == FlowDirection.LeftToRight && SourceText.FlowDirection == FlowDirection.LeftToRight);
+                    && DocumentPanel.FlowDirection == FlowDirection.LeftToRight && SourceScroll.FlowDirection == FlowDirection.LeftToRight);
                 var languageElements = Descendants(DocumentPanel).ToList();
                 Check($"Controles del lector traducidos: {option.Code}", languageElements.OfType<Button>().Any(button => Equals(button.Content, Localization.Get("Copy")))
                     && _renderer!.Anchors.ContainsKey(headings[0].Id));
@@ -231,8 +235,14 @@ public sealed partial class MainWindow
             _settings.Language = "es";
             ApplyLanguage();
 
+            var previousRenderer = _renderer!;
+            var previousBlocks = DocumentPanel.Children.OfType<RichTextBlock>().ToList();
+
             int previous = _historyIndex;
             Navigate(new ReadingDocument("# Segundo", null, "Segundo"), MarkdownService.Parse("# Segundo"));
+            Check("Cambio de documento libera contenido e índices anteriores", previousBlocks.Count > 0
+                && previousBlocks.All(block => block.Blocks.Count == 0 && block.ContextFlyout is null)
+                && previousRenderer.Anchors.Count == 0 && previousRenderer.Search("definición").Count == 0);
             GoHistory(-1);
             Check("Historial hacia atrás", _historyIndex == previous && _document?.Source == sample);
             GoHistory(1);
@@ -294,6 +304,39 @@ public sealed partial class MainWindow
             Navigate(new ReadingDocument(remoteSource, null, "Imagen HTTP"), MarkdownService.Parse(remoteSource));
             Check("Carga real de imagen por HTTP", await WaitForImageAsync());
             await response;
+
+            var virtualSource = new StringBuilder("# Inicio virtual\n\n");
+            for (int section = 1; section <= 450; section++)
+                virtualSource.Append($"## Sección virtual {section}\n\nTexto de lectura del bloque {section}. **Contenido** para recorrer el documento.\n\n");
+            virtualSource.Append("## Destino final\n\ndestino-unico[^virtual]\n\n| Uno | Dos |\n| --- | --- |\n| destino-unico | destino-unico |\n\n[^virtual]: Nota virtual al final.\n");
+            string virtualMarkdown = virtualSource.ToString();
+            Navigate(new ReadingDocument(virtualMarkdown, null, "Prueba virtual"), MarkdownService.Parse(virtualMarkdown));
+            await Task.Delay(200);
+            DocumentPanel.UpdateLayout();
+            var repeater = DocumentPanel.Children.OfType<ItemsRepeater>().SingleOrDefault();
+            int realized = repeater is null ? 0 : Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(repeater);
+            Check("Documentos extensos solo crean controles cercanos a la pantalla", repeater is not null && realized > 0 && realized < repeater.ItemsSourceView.Count / 2, $"Controles: {realized}");
+            Check("Índice incluye encabezados aún no materializados", _renderer!.Anchors.ContainsKey("destino-final") && OutlineList.Items.Count == 452);
+            var virtualMatches = _renderer.Search("destino-unico");
+            Check("Búsqueda virtual incluye párrafos y celdas fuera de pantalla", virtualMatches.Count == 3);
+            ScrollTo(virtualMatches.Last());
+            await Task.Delay(100);
+            Check("Navegación a coincidencia virtual materializa el texto", _renderer.PrepareForNavigation(virtualMatches.Last()) is RichTextBlock virtualMatch && virtualMatch.Blocks.Count > 0);
+            JumpToAnchor("destino-final");
+            Check("Navegación a encabezado virtual", _renderer.ResolveAnchor("destino-final") is RichTextBlock);
+            JumpToAnchor("fn:virtual");
+            Check("Notas al pie virtuales conservan anclas", _renderer.ResolveAnchor("fn:virtual") is StackPanel);
+            JumpToAnchor("inicio-virtual");
+            await Task.Delay(100);
+            Check("Regreso al inicio conserva virtualización", repeater is not null && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(repeater) < repeater.ItemsSourceView.Count / 2);
+            SetSource(true);
+            Check("Vista fuente de documento virtual conserva el contenido completo", SourceText?.Text == virtualMarkdown);
+            SetSource(false);
+            Navigate(new ReadingDocument("# Fin", null, "Fin"), MarkdownService.Parse("# Fin"));
+            Check("Salir de documento virtual libera su origen de datos", repeater?.ItemsSource is null);
+            Check("Cambiar de documento virtual representa el nuevo contenido sin errores", _renderer!.Anchors.ContainsKey("fin")
+                && DocumentPanel.Children.OfType<RichTextBlock>().Any()
+                && !(Notice.IsOpen && Notice.Severity == InfoBarSeverity.Error));
         }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada", passed = false, detail = ex.ToString() }); }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);

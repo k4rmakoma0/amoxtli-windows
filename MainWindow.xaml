@@ -120,9 +120,7 @@
                 <ScrollViewer x:Name="ReaderScroll" Grid.Row="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" ViewChanged="Reader_ViewChanged">
                     <StackPanel x:Name="DocumentPanel" MaxWidth="920" Padding="40,32,40,64" HorizontalAlignment="Stretch" Spacing="4"/>
                 </ScrollViewer>
-                <ScrollViewer x:Name="SourceScroll" Grid.Row="1" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                    <TextBlock x:Name="SourceText" Padding="32" FontFamily="Cascadia Mono, Consolas" FontSize="14" IsTextSelectionEnabled="True" TextWrapping="NoWrap"/>
-                </ScrollViewer>
+                <ScrollViewer x:Name="SourceScroll" Grid.Row="1" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"/>
             </Grid>
         </SplitView>
         <Grid Grid.Row="4" Padding="16,8" ColumnSpacing="16">

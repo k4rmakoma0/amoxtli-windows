@@ -8,15 +8,15 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="e7bccad6-d31d-40f2-a3ad-4386578c20b9"
-    Publisher="CN=anaya"
-    Version="1.0.0.0" />
+    Name="k4rmakoma.AmoxtliMarkdownViewer"
+    Publisher="CN=4BFAFAFE-7613-4C4B-9CBE-A39FAFF74FEF"
+    Version="1.0.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="e7bccad6-d31d-40f2-a3ad-4386578c20b9" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>Amoxtli</DisplayName>
-    <PublisherDisplayName>anaya</PublisherDisplayName>
+    <DisplayName>Amoxtli: Markdown Viewer</DisplayName>
+    <PublisherDisplayName>k4rmakoma</PublisherDisplayName>
     <Logo>Assets\Amoxtli.StoreLogo.png</Logo>
   </Properties>
 

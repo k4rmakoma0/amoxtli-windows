@@ -39,6 +39,7 @@ public sealed partial class MainWindow : Window
     private string? _folderPath;
     private ReadingDocument? _document;
     private NativeMarkdownRenderer? _renderer;
+    private TextBlock? SourceText => SourceScroll.Content as TextBlock;
     private FileSystemWatcher? _watcher;
     private DispatcherQueueTimer? _reloadTimer;
     private List<FrameworkElement> _matches = [];
@@ -85,7 +86,7 @@ public sealed partial class MainWindow : Window
         NavigationPivot.FlowDirection = FindBar.FlowDirection = Root.FlowDirection;
         NavigationSplit.PanePlacement = Localization.IsRightToLeft ? SplitViewPanePlacement.Right : SplitViewPanePlacement.Left;
         // App language never changes a user's Markdown or source-code direction.
-        DocumentPanel.FlowDirection = SourceText.FlowDirection = FlowDirection.LeftToRight;
+        DocumentPanel.FlowDirection = SourceScroll.FlowDirection = FlowDirection.LeftToRight;
         if (_folderPath is not null)
         {
             FolderName.Text = System.IO.Path.GetFileName(_folderPath.TrimEnd(System.IO.Path.DirectorySeparatorChar));
@@ -212,8 +213,7 @@ public sealed partial class MainWindow : Window
             _renderer?.Dispose();
             _renderer = new NativeMarkdownRenderer(DocumentPanel, _settings, document.Path, OpenLinkAsync, message => Notify(message, InfoBarSeverity.Warning));
             _renderer.Render(parsed);
-            SourceText.Text = document.Source;
-            SourceText.FontSize = _settings.FontSize * .9;
+            UpdateSourceText();
             OutlineList.ItemsSource = MarkdownService.GetHeadings(parsed);
             OutlineEmpty.Visibility = OutlineList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             DocumentName.Text = document.Kind switch
@@ -225,7 +225,7 @@ public sealed partial class MainWindow : Window
             DocumentPath.Text = document.Path ?? Localization.Get("TemporaryDocument");
             ToolTipService.SetToolTip(DocumentPath, DocumentPath.Text);
             Title = $"{DocumentName.Text} — Amoxtli";
-            int words = Regex.Matches(document.Source, @"\S+").Count;
+            int words = Regex.Count(document.Source, @"\S+");
             StatusText.Text = Localization.Format("ReadingStatus", words, Math.Max(1, (int)Math.Ceiling(words / 220d)));
             ZoomText.Text = Localization.Percent(_settings.FontSize / 16);
             BackButton.IsEnabled = _historyIndex > 0;
@@ -281,7 +281,7 @@ public sealed partial class MainWindow : Window
     {
         id = Uri.UnescapeDataString(id);
         if (id.Length == 0) { ReaderScroll.ChangeView(null, 0, null); return; }
-        if (_renderer?.Anchors.TryGetValue(id, out var element) == true)
+        if (_renderer?.ResolveAnchor(id) is { } element)
         {
             SetSource(false); ScrollTo(element);
         }
@@ -290,6 +290,7 @@ public sealed partial class MainWindow : Window
 
     private void ScrollTo(FrameworkElement element)
     {
+        element = _renderer?.PrepareForNavigation(element) ?? element;
         DocumentPanel.UpdateLayout();
         var position = element.TransformToVisual(DocumentPanel).TransformPoint(new Windows.Foundation.Point());
         ReaderScroll.ChangeView(null, Math.Max(0, position.Y - 20), null);
@@ -513,8 +514,25 @@ public sealed partial class MainWindow : Window
     private void SetSource(bool source)
     {
         SourceMenu.IsChecked = source;
+        UpdateSourceText();
         SourceScroll.Visibility = source ? Visibility.Visible : Visibility.Collapsed;
         ReaderScroll.Visibility = source ? Visibility.Collapsed : Visibility.Visible;
+    }
+    private void UpdateSourceText()
+    {
+        // Keep the hidden view free of native text/layout state. Release the whole control
+        // when leaving source view instead of retaining a second copy of a large document.
+        if (SourceText is { } previous) previous.Text = "";
+        SourceScroll.Content = SourceMenu.IsChecked && _document is not null ? new TextBlock
+        {
+            Text = _document.Source,
+            Padding = new Thickness(32),
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
+            FontSize = _settings.FontSize * .9,
+            IsTextSelectionEnabled = true,
+            TextWrapping = TextWrapping.NoWrap,
+            FlowDirection = FlowDirection.LeftToRight
+        } : null;
     }
     private void ZoomIn_Click(object sender, RoutedEventArgs e) => ChangeFont(1);
     private void ZoomOut_Click(object sender, RoutedEventArgs e) => ChangeFont(-1);

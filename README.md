@@ -58,6 +58,18 @@ dotnet build Amoxtli.csproj -c Release -p:Platform=x64 -p:GenerateAppxPackageOnB
 
 Estas pruebas ejecutan la aplicación en un dispatcher real de WinUI y revisan el análisis de Markdown, la distribución nativa de las tablas, las tareas, el índice, las anclas, las notas, la búsqueda, el historial, los errores de archivo y la apertura de carpetas. El informe se guarda en `artifacts\smoke-results.json`. No usan el portapapeles del usuario ni abren navegadores, cambian asociaciones o guardan preferencias. El modo de pruebas solo existe en Debug.
 
+### Memoria de documentos grandes
+
+Los documentos de más de 512 KiB de bloques Markdown, o con más de 300 bloques principales, usan `ItemsRepeater` para materializar el contenido cercano a la pantalla. La búsqueda y el índice abarcan también los bloques fuera de pantalla. La virtualización funciona por bloque principal; una tabla o un párrafo individual excepcionalmente grande todavía requiere materializar ese bloque completo. La vista de código se crea al abrirla y se libera al ocultarla.
+
+Para medir tres alternancias entre un documento grande y uno pequeño:
+
+```powershell
+.\scripts\Test-Memory.ps1 -DocumentPath "C:\Documentos\documento-grande.md"
+```
+
+El informe `artifacts\memory-results.json` separa memoria residente, memoria privada y memoria administrada. Comprueba también que se libera el renderizador anterior y el contenido de sus controles. La recolección forzada se usa exclusivamente dentro de este diagnóstico; la app normal no fuerza el GC ni recorta el conjunto de trabajo. El historial conserva hasta 20 textos de documentos para la navegación, por lo que abrir archivos nuevos repetidamente puede aumentar la memoria dentro de ese límite.
+
 ## Límites de esta versión
 
 - El HTML sin procesar se conserva como código fuente; `<br>` se interpreta como salto de línea. No se ejecuta JavaScript ni se incrustan páginas web.

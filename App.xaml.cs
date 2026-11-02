@@ -26,6 +26,13 @@ public partial class App : Application
             _window.Close();
             return;
         }
+        int memory = Array.IndexOf(commandLine, "--memory-test");
+        if (memory >= 0 && memory + 2 < commandLine.Length)
+        {
+            await _window.RunMemoryTestsAsync(commandLine[memory + 1], commandLine[memory + 2]);
+            _window.Close();
+            return;
+        }
 #endif
         try
         {
