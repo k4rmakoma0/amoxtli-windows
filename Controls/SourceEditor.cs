@@ -120,6 +120,8 @@ internal sealed class SourceEditor : Grid
     /// </summary>
     private void Reload()
     {
+        // Keep typing the text box has not reported yet.
+        if (_contentChanging) Box_TextChanged(Box, new RoutedEventArgs());
         var (start, length) = Selection;
         _suppress = true;
         try { Box.Document.SetText(TextSetOptions.None, ToBox(_text) + "\r"); }
