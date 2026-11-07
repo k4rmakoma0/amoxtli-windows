@@ -104,7 +104,7 @@ public sealed partial class MainWindow
                 var settingsUri = DefaultAppService.GetSettingsUri(appId);
                 Check("Configuración de app conserva identidad escapada", settingsUri.Scheme == "ms-settings" && Uri.UnescapeDataString(settingsUri.Query) == $"?registeredAUMID={appId}");
             }
-            const string sample = """
+            string sample = """
                 ---
                 title: Prueba
                 ---
@@ -143,7 +143,7 @@ public sealed partial class MainWindow
                 <script>alert('no ejecutar')</script>
 
                 [^uno]: Nota al pie.
-                """;
+                """.ReplaceLineEndings("\n");
             var parsed = MarkdownService.Parse(sample);
             var headings = MarkdownService.GetHeadings(parsed);
             Check("Encabezados con acentos", headings.Count == 3 && headings[0].Title == "Introducción");
@@ -203,13 +203,12 @@ public sealed partial class MainWindow
             _renderer.Search("");
             Check("Búsqueda limpia resaltados", richBlocks.All(t => t.TextHighlighters.Count == 0));
 
-            SetSource(true);
-            Check("Vista fuente", SourceScroll.Visibility == Visibility.Visible && SourceText?.Text == sample);
+            SetMode(EditorMode.Source);
+            Check("Vista fuente", SourceHost.Visibility == Visibility.Visible && ReaderScroll.Visibility == Visibility.Collapsed && _sourceEditor.Text == sample);
             RenderCurrent(true);
-            Check("Vista fuente conserva documento al volver a renderizar", SourceText?.Text == sample);
-            var previousSourceText = SourceText;
-            SetSource(false);
-            Check("Ocultar fuente libera el control y su texto", SourceScroll.Content is null && previousSourceText?.Text == "");
+            Check("Vista fuente conserva documento al volver a renderizar", _sourceEditor.Text == sample);
+            SetMode(EditorMode.Format);
+            Check("Cerrar fuente libera su texto", SourceHost.Visibility == Visibility.Collapsed && _sourceEditor.Text == "" && !_sourceEditor.CanUndo);
             JumpToAnchor(headings[0].Id);
             Check("Navegación por anclas", ReaderScroll.Visibility == Visibility.Visible);
 
@@ -223,9 +222,10 @@ public sealed partial class MainWindow
                 Check($"Cambio inmediato de interfaz: {option.Code}", Root.Children.OfType<MenuBar>().First().Items[0].Title == Localization.Get("MenuFile")
                     && NavigationPivot.Items.OfType<PivotItem>().First().Header?.ToString() == Localization.Get("Files")
                     && SearchBox.PlaceholderText == Localization.Get("Find") && SidebarMenu.Text == Localization.Get("Navigation"));
-                Check($"Documento e historial conservados: {option.Code}", _document?.Source == sample && SourceScroll.Content is null && _history.Count == languageHistory && _matches.Count == 1 && SearchBox.Text == "definición");
+                Check($"Documento e historial conservados: {option.Code}", _document?.Source == sample && _sourceEditor.Text == "" && _history.Count == languageHistory && _matches.Count == 1 && SearchBox.Text == "definición");
                 Check($"Dirección de interfaz correcta: {option.Code}", Root.FlowDirection == (option.Code == "ar" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight)
-                    && DocumentPanel.FlowDirection == FlowDirection.LeftToRight && SourceScroll.FlowDirection == FlowDirection.LeftToRight);
+                    && DocumentPanel.FlowDirection == FlowDirection.LeftToRight && SourceHost.FlowDirection == FlowDirection.LeftToRight
+                    && FormatMenu.Title == Localization.Get("MenuFormat") && ModeSourceButton.Content?.ToString() == Localization.Get("ModeSource"));
                 var languageElements = Descendants(DocumentPanel).ToList();
                 Check($"Controles del lector traducidos: {option.Code}", languageElements.OfType<Button>().Any(button => Equals(button.Content, Localization.Get("Copy")))
                     && _renderer!.Anchors.ContainsKey(headings[0].Id));
@@ -329,9 +329,9 @@ public sealed partial class MainWindow
             JumpToAnchor("inicio-virtual");
             await Task.Delay(100);
             Check("Regreso al inicio conserva virtualización", repeater is not null && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(repeater) < repeater.ItemsSourceView.Count / 2);
-            SetSource(true);
-            Check("Vista fuente de documento virtual conserva el contenido completo", SourceText?.Text == virtualMarkdown);
-            SetSource(false);
+            SetMode(EditorMode.Source);
+            Check("Vista fuente de documento virtual conserva el contenido completo", _sourceEditor.Text == virtualMarkdown);
+            SetMode(EditorMode.Format);
             Navigate(new ReadingDocument("# Fin", null, "Fin"), MarkdownService.Parse("# Fin"));
             Check("Salir de documento virtual libera su origen de datos", repeater?.ItemsSource is null);
             Check("Cambiar de documento virtual representa el nuevo contenido sin errores", _renderer!.Anchors.ContainsKey("fin")
@@ -339,6 +339,8 @@ public sealed partial class MainWindow
                 && !(Notice.IsOpen && Notice.Severity == InfoBarSeverity.Error));
         }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada", passed = false, detail = ex.ToString() }); }
+        try { await RunEditorTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new { passed, failed, results }, new JsonSerializerOptions { WriteIndented = true }));
     }

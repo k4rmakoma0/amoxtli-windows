@@ -27,12 +27,16 @@
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <MenuBar>
             <MenuBarItem services:LocalizedText.Text="MenuFile">
                 <MenuFlyoutItem services:LocalizedText.Text="OpenFile" Click="OpenFile_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="O" Modifiers="Control"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
                 <MenuFlyoutItem services:LocalizedText.Text="OpenFolder" Click="OpenFolder_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="O" Modifiers="Control,Shift"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem x:Name="SaveMenu" services:LocalizedText.Text="Save" Click="Save_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="S" Modifiers="Control"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
+                <MenuFlyoutItem services:LocalizedText.Text="SaveAs" Click="SaveAs_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="S" Modifiers="Control,Shift"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem services:LocalizedText.Text="Reload" Click="Reload_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="F5"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
                 <MenuFlyoutItem services:LocalizedText.Text="Reveal" Click="Reveal_Click"/>
                 <MenuFlyoutSeparator/>
@@ -41,19 +45,26 @@
                 <MenuFlyoutItem services:LocalizedText.Text="CloseWindow" Click="Close_Click"/>
             </MenuBarItem>
             <MenuBarItem services:LocalizedText.Text="MenuEdit">
+                <MenuFlyoutItem x:Name="UndoMenu" services:LocalizedText.Text="Undo" Click="Undo_Click" KeyboardAcceleratorTextOverride="Ctrl+Z"/>
+                <MenuFlyoutItem x:Name="RedoMenu" services:LocalizedText.Text="Redo" Click="Redo_Click" KeyboardAcceleratorTextOverride="Ctrl+Y"/>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem services:LocalizedText.Text="CopyMarkdown" Click="CopyMarkdown_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="C" Modifiers="Control,Shift"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
-                <MenuFlyoutItem services:LocalizedText.Text="PasteMarkdown" Click="Paste_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="V" Modifiers="Control" Invoked="PasteAccelerator_Invoked"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
+                <MenuFlyoutItem services:LocalizedText.Text="PasteMarkdown" Click="Paste_Click"/>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem services:LocalizedText.Text="Find" Click="Find_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="F" Modifiers="Control"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
             </MenuBarItem>
             <MenuBarItem services:LocalizedText.Text="MenuView">
-                <ToggleMenuFlyoutItem x:Name="SidebarMenu" services:LocalizedText.Text="Navigation" IsChecked="True" Click="Sidebar_Click"><ToggleMenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="B" Modifiers="Control"/></ToggleMenuFlyoutItem.KeyboardAccelerators></ToggleMenuFlyoutItem>
-                <ToggleMenuFlyoutItem x:Name="SourceMenu" services:LocalizedText.Text="Source" Click="Source_Click"><ToggleMenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="U" Modifiers="Control"/></ToggleMenuFlyoutItem.KeyboardAccelerators></ToggleMenuFlyoutItem>
+                <ToggleMenuFlyoutItem x:Name="SidebarMenu" services:LocalizedText.Text="Navigation" IsChecked="True" Click="Sidebar_Click" KeyboardAcceleratorTextOverride="Ctrl+Shift+L"/>
+                <MenuFlyoutSeparator/>
+                <RadioMenuFlyoutItem x:Name="ViewSourceMenu" GroupName="EditorMode" services:LocalizedText.Text="ViewSource" Click="ViewMode_Click" Tag="Source" KeyboardAcceleratorTextOverride="Ctrl+Shift+1"/>
+                <RadioMenuFlyoutItem x:Name="ViewFormatMenu" GroupName="EditorMode" services:LocalizedText.Text="ViewFormat" Click="ViewMode_Click" Tag="Format" KeyboardAcceleratorTextOverride="Ctrl+Shift+2" IsChecked="True"/>
+                <RadioMenuFlyoutItem x:Name="ViewSplitMenu" GroupName="EditorMode" services:LocalizedText.Text="ViewSplit" Click="ViewMode_Click" Tag="Split" KeyboardAcceleratorTextOverride="Ctrl+Shift+3"/>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem services:LocalizedText.Text="ZoomIn" Click="ZoomIn_Click"/>
                 <MenuFlyoutItem services:LocalizedText.Text="ZoomOut" Click="ZoomOut_Click"/>
                 <MenuFlyoutItem services:LocalizedText.Text="ZoomReset" Click="ZoomReset_Click"/>
             </MenuBarItem>
+            <MenuBarItem x:Name="FormatMenu" services:LocalizedText.Text="MenuFormat"/>
             <MenuBarItem services:LocalizedText.Text="MenuHelp">
                 <MenuFlyoutItem services:LocalizedText.Text="Guide" Click="Welcome_Click"/>
                 <MenuFlyoutItem services:LocalizedText.Text="About" Click="About_Click"/>
@@ -67,6 +78,11 @@
                 <Button x:Name="ForwardButton" Click="Forward_Click" IsEnabled="False" services:LocalizedText.ToolTip="ForwardTip" services:LocalizedText.Name="Forward"><FontIcon Glyph="&#xE72A;" FontSize="16"/><Button.KeyboardAccelerators><KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="ForwardAccelerator_Invoked"/></Button.KeyboardAccelerators></Button>
                 <Button Click="OpenFile_Click" services:LocalizedText.ToolTip="OpenFileTip"><StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE8A5;" FontSize="16"/><TextBlock services:LocalizedText.Text="Open"/></StackPanel></Button>
                 <Button Click="OpenFolder_Click" services:LocalizedText.ToolTip="OpenFolderTip" services:LocalizedText.Name="OpenFolder"><FontIcon Glyph="&#xE8B7;" FontSize="16"/></Button>
+                <StackPanel x:Name="ModeSelector" Orientation="Horizontal" Margin="8,0,0,0">
+                    <ToggleButton x:Name="ModeSourceButton" Tag="Source" Click="ViewMode_Click" CornerRadius="4,0,0,4" services:LocalizedText.Text="ModeSource"/>
+                    <ToggleButton x:Name="ModeFormatButton" Tag="Format" Click="ViewMode_Click" CornerRadius="0" IsChecked="True" services:LocalizedText.Text="ModeFormat"/>
+                    <ToggleButton x:Name="ModeSplitButton" Tag="Split" Click="ViewMode_Click" CornerRadius="0,4,4,0" services:LocalizedText.Text="ModeSplit"/>
+                </StackPanel>
             </StackPanel>
             <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
                 <TextBlock x:Name="DocumentName" services:LocalizedText.Text="WelcomeTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -77,10 +93,11 @@
                 <Button Click="Settings_Click" services:LocalizedText.ToolTip="Preferences" services:LocalizedText.Name="Preferences"><FontIcon Glyph="&#xE713;" FontSize="16"/></Button>
             </StackPanel>
         </Grid>
-        <InfoBar x:Name="Notice" Grid.Row="2" IsOpen="False" Margin="12,0,12,8" Severity="Informational"/>
+        <CommandBar x:Name="FormatBar" Grid.Row="2" Margin="8,-8,8,4" HorizontalAlignment="Left" Background="Transparent" DefaultLabelPosition="Collapsed" IsDynamicOverflowEnabled="True" OverflowButtonVisibility="Auto" IsEnabled="False"/>
+        <InfoBar x:Name="Notice" Grid.Row="3" IsOpen="False" Margin="12,0,12,8" Severity="Informational"/>
         <!-- A sibling receives the reader's shadow without adding a sidebar divider. -->
-        <Grid x:Name="WorkspaceShadowReceiver" Grid.Row="3" Background="Transparent" IsHitTestVisible="False"/>
-        <SplitView x:Name="NavigationSplit" Grid.Row="3" DisplayMode="Inline" IsPaneOpen="True" OpenPaneLength="278" CompactPaneLength="0" PaneBackground="Transparent" BorderThickness="0" FlowDirection="LeftToRight">
+        <Grid x:Name="WorkspaceShadowReceiver" Grid.Row="4" Background="Transparent" IsHitTestVisible="False"/>
+        <SplitView x:Name="NavigationSplit" Grid.Row="4" DisplayMode="Inline" IsPaneOpen="True" OpenPaneLength="278" CompactPaneLength="0" PaneBackground="Transparent" BorderThickness="0" FlowDirection="LeftToRight">
             <SplitView.Pane>
                 <Pivot x:Name="NavigationPivot" Margin="4,0,4,4" Background="Transparent">
                     <PivotItem services:LocalizedText.Text="Files">
@@ -117,15 +134,19 @@
                     <Button Grid.Column="3" Click="NextMatch_Click" services:LocalizedText.Name="NextMatch"><FontIcon Glyph="&#xE70D;" FontSize="12"/></Button>
                     <Button Grid.Column="4" Click="CloseFind_Click" services:LocalizedText.Name="CloseFind"><FontIcon Glyph="&#xE711;" FontSize="12"/></Button>
                 </Grid>
-                <ScrollViewer x:Name="ReaderScroll" Grid.Row="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" ViewChanged="Reader_ViewChanged">
-                    <StackPanel x:Name="DocumentPanel" MaxWidth="920" Padding="40,32,40,64" HorizontalAlignment="Stretch" Spacing="4"/>
-                </ScrollViewer>
-                <ScrollViewer x:Name="SourceScroll" Grid.Row="1" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"/>
+                <Grid x:Name="EditorArea" Grid.Row="1">
+                    <Grid.ColumnDefinitions><ColumnDefinition x:Name="SourceColumn" Width="0"/><ColumnDefinition x:Name="DividerColumn" Width="0"/><ColumnDefinition x:Name="ReaderColumn" Width="*"/></Grid.ColumnDefinitions>
+                    <Border x:Name="SourceHost" Visibility="Collapsed" FlowDirection="LeftToRight"/>
+                    <Border x:Name="SplitDivider" Grid.Column="1" Width="1" Visibility="Collapsed" Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                    <ScrollViewer x:Name="ReaderScroll" Grid.Column="2" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" ViewChanged="Reader_ViewChanged">
+                        <StackPanel x:Name="DocumentPanel" MaxWidth="920" Padding="40,32,40,64" HorizontalAlignment="Stretch" Spacing="4"/>
+                    </ScrollViewer>
+                </Grid>
             </Grid>
         </SplitView>
-        <Grid Grid.Row="4" Padding="16,8" ColumnSpacing="16">
+        <Grid Grid.Row="5" Padding="16,8" ColumnSpacing="16">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBlock x:Name="StatusText" services:LocalizedText.Text="ReadOnly" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="StatusText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
             <TextBlock x:Name="ZoomText" Grid.Column="1" Text="100 %" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             <TextBlock x:Name="ProgressText" Grid.Column="2" Text="0 %" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
         </Grid>

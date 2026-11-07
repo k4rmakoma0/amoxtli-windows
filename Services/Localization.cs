@@ -72,6 +72,13 @@ public static class Localization
         ? value : GetCatalog("en").TryGetValue(key, out var fallback) ? fallback : key;
     public static string Format(string key, params object[] args) => string.Format(Culture, Get(key), args);
     public static string Percent(double value) => value.ToString("P0", Culture);
+    /// <summary>"Ctrl+Shift+X" with the modifier names of the interface language, such as "Strg+Umschalt+X".</summary>
+    public static string Shortcut(string keys) => string.Join("+", keys.Split('+').Select(key => key switch
+    {
+        "Ctrl" => Get("KeyCtrl"),
+        "Shift" => Get("KeyShift"),
+        _ => key
+    }));
 
     public static string WelcomeMarkdown() => $"""
         # {Get("WelcomeTitle")}
@@ -82,19 +89,21 @@ public static class Localization
 
         {Get("WelcomeNavigation")}
 
-        > {Get("WelcomeReadOnly")}
+        > {Get("WelcomeEditing")}
 
         ## {Get("MenuHelp")}
 
         | {Get("Action")} | {Get("Shortcut")} |
         | :--- | :--- |
-        | {Get("OpenFile")} | Ctrl+O |
-        | {Get("OpenFolder")} | Ctrl+Shift+O |
-        | {Get("Find")} | Ctrl+F |
-        | {Get("CopyMarkdown")} | Ctrl+Shift+C |
-        | {Get("PasteMarkdown")} | Ctrl+V |
-        | {Get("Navigation")} | Ctrl+B |
-        | {Get("Source")} | Ctrl+U |
+        | {Get("OpenFile")} | {Shortcut("Ctrl+O")} |
+        | {Get("OpenFolder")} | {Shortcut("Ctrl+Shift+O")} |
+        | {Get("Save")} | {Shortcut("Ctrl+S")} |
+        | {Get("Find")} | {Shortcut("Ctrl+F")} |
+        | {Get("CopyMarkdown")} | {Shortcut("Ctrl+Shift+C")} |
+        | {Get("Navigation")} | {Shortcut("Ctrl+Shift+L")} |
+        | {Get("ViewSource")} | {Shortcut("Ctrl+Shift+1")} |
+        | {Get("ViewFormat")} | {Shortcut("Ctrl+Shift+2")} |
+        | {Get("ViewSplit")} | {Shortcut("Ctrl+Shift+3")} |
         | {Get("Reload")} | F5 |
 
         ## Markdown

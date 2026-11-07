@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Amoxtli.Services;
 
-public sealed record HeadingInfo(string Title, string Id, int Level)
+public sealed record HeadingInfo(string Title, string Id, int Level, int Line = 0)
 {
     public Microsoft.UI.Xaml.Thickness Indent => new((Level - 1) * 12, 6, 0, 6);
 }
@@ -28,7 +28,7 @@ public static class MarkdownService
     public static MarkdownDocument Parse(string source) => Markdown.Parse(source, Pipeline);
 
     public static List<HeadingInfo> GetHeadings(MarkdownDocument document) => document.Descendants<HeadingBlock>()
-        .Select(h => new HeadingInfo(PlainText(h.Inline), h.GetAttributes().Id ?? "", h.Level)).ToList();
+        .Select(h => new HeadingInfo(PlainText(h.Inline), h.GetAttributes().Id ?? "", h.Level, h.Line)).ToList();
 
     public static string PlainText(ContainerInline? inline)
     {
