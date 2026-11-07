@@ -5,6 +5,7 @@ using Amoxtli.Services;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using System.Text;
 using Windows.System;
 
@@ -234,7 +235,7 @@ public sealed partial class MainWindow
         Check("Formato se actualiza tras editar", _renderer?.Search("párrafo dividido").Count == 1);
         _sourceEditor.Undo();
         SetMode(EditorMode.Format);
-        Check("Formato deshabilita las herramientas", !FormatBar.IsEnabled);
+        Check("Formato deshabilita las herramientas", !FormatBar.PrimaryCommands.OfType<AppBarToggleButton>().Any(b => b.IsEnabled) && FormatMenu.Items.All(i => !i.IsEnabled));
 
         var tableDialog = new InsertTableDialog();
         tableDialog.Columns.Value = 25;
@@ -251,6 +252,30 @@ public sealed partial class MainWindow
             && ToolTipService.GetToolTip(FormatBar.PrimaryCommands.OfType<AppBarToggleButton>().First())?.ToString() == "Fett (Strg+B)");
         _settings.Language = "es";
         ApplyLanguage();
+
+        // Typography (port document, section 8). Applied directly so the tests never write preferences.
+        Check("Tamaño se ajusta al paso más cercano", Typesetting.Snap(23) is 22 or 24 && Typesetting.Snap(13) == 13 && Typesetting.Snap(100) == 32 && Typesetting.Snap(double.NaN) == Typesetting.DefaultSize);
+        Check("Pasos de tamaño con límites", Typesetting.Step(16, 1) == 17 && Typesetting.Step(32, 1) == 32 && Typesetting.Step(10, -1) == 10 && Typesetting.Step(20, -1) == 18);
+        Check("Tipo de letra desconocido vuelve a Sistema", Typesetting.NormalizeTypeface("Rounded") == Typesetting.System && Typesetting.NormalizeTypeface(null) == Typesetting.System);
+        Check("Atajos de tamaño", new[] { ((VirtualKey)187, VirtualKeyModifiers.Control), ((VirtualKey)187, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift), (VirtualKey.Add, VirtualKeyModifiers.Control),
+            ((VirtualKey)189, VirtualKeyModifiers.Control), (VirtualKey.Number0, VirtualKeyModifiers.Control) }.All(_shortcuts.ContainsKey));
+        Navigate(new ReadingDocument(sample, null, "Editor"), MarkdownService.Parse(sample));
+        Check("Aa disponible en Formato sin las herramientas", _typographyButton.IsEnabled && !FormatBar.PrimaryCommands.OfType<AppBarToggleButton>().Any(b => b.IsEnabled));
+        _settings.Typeface = Typesetting.Serif; _settings.FontSize = 20;
+        ApplyTypography();
+        var body = DocumentPanel.Children.OfType<RichTextBlock>().First(t => t.Blocks.OfType<Paragraph>().Any(p => p.Inlines.OfType<Run>().Any(r => r.Text.StartsWith("Texto"))));
+        var title = DocumentPanel.Children.OfType<RichTextBlock>().First();
+        Check("Formato usa el tipo de letra y el tamaño", body.FontFamily.Source == "Georgia" && body.FontSize == 20 && title.FontSize > 20 && ZoomText.Text == Localization.Percent(20 / Typesetting.DefaultSize));
+        Check("Aa marca el tipo de letra", _typefaceItems.Single(item => item.Item.IsChecked).Typeface == Typesetting.Serif);
+        SetMode(EditorMode.Source);
+        Check("Fuente usa el tipo de letra y el tamaño", _sourceEditor.Box.FontFamily.Source == "Georgia" && _sourceEditor.Box.FontSize == 20
+            && _sourceEditor.Box.Document.GetRange(2, 3).CharacterFormat.Size > 20);
+        _settings.Typeface = Typesetting.Monospace;
+        ApplyTypography();
+        Check("Fuente monoespaciada en todo el editor", _sourceEditor.Box.FontFamily.Source == Typesetting.FontFamily(Typesetting.Monospace));
+        SetMode(EditorMode.Format);
+        _settings.Typeface = Typesetting.System; _settings.FontSize = Typesetting.DefaultSize;
+        ApplyTypography();
 
         string folder = Path.Combine(Path.GetTempPath(), "amoxtli-pruebas-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);

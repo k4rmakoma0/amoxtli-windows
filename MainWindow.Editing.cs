@@ -20,7 +20,6 @@ namespace Amoxtli;
 public sealed partial class MainWindow
 {
     internal enum EditorMode { Source, Format, Split }
-    private const string SourceFontFamily = "Segoe UI";
     private EditorMode _mode = EditorMode.Format;
     private SourceEditor _sourceEditor = null!;
     private DispatcherQueueTimer _editTimer = null!;
@@ -37,7 +36,7 @@ public sealed partial class MainWindow
     private void InitializeEditing()
     {
         _sourceEditor = new SourceEditor();
-        _sourceEditor.SetTypography(SourceFontFamily, _settings.FontSize);
+        _sourceEditor.SetTypography(Typesetting.FontFamily(_settings.Typeface), _settings.FontSize);
         _sourceEditor.Edited += SourceEditor_Edited;
         _sourceEditor.SelectionMoved += ScheduleToolStates;
         _sourceEditor.Shortcut = TryShortcut;
@@ -86,6 +85,12 @@ public sealed partial class MainWindow
         _shortcuts[(VirtualKey.Number3, CtrlShift)] = () => SetMode(EditorMode.Split);
         _shortcuts[(VirtualKey.L, CtrlShift)] = () => SetSidebarOpen(!NavigationSplit.IsPaneOpen);
         _shortcuts[(VirtualKey.Z, Ctrl)] = () => ActiveEditor?.Undo();
+        // Ctrl+= and Ctrl++ (Shift on many layouts, or the keypad) increase; Ctrl+- decreases.
+        foreach (var key in new[] { (VirtualKey)187, VirtualKey.Add })
+            foreach (var modifiers in new[] { Ctrl, CtrlShift })
+                _shortcuts[(key, modifiers)] = () => SetTypography(fontSize: Typesetting.Step(_settings.FontSize, 1));
+        _shortcuts[((VirtualKey)189, Ctrl)] = _shortcuts[(VirtualKey.Subtract, Ctrl)] = () => SetTypography(fontSize: Typesetting.Step(_settings.FontSize, -1));
+        _shortcuts[(VirtualKey.Number0, Ctrl)] = _shortcuts[(VirtualKey.NumberPad0, Ctrl)] = () => SetTypography(fontSize: Typesetting.DefaultSize);
         _shortcuts[(VirtualKey.Y, Ctrl)] = () => ActiveEditor?.Redo();
     }
 
@@ -277,7 +282,8 @@ public sealed partial class MainWindow
     private void UpdateToolStates()
     {
         var editor = ActiveEditor;
-        FormatBar.IsEnabled = editor is not null;
+        // Typography also applies to the formatted view, so it stays available.
+        foreach (var command in FormatBar.PrimaryCommands.OfType<Control>()) command.IsEnabled = editor is not null || command == _typographyButton;
         foreach (var item in FormatMenu.Items) item.IsEnabled = editor is not null;
         var state = FormatState.None;
         if (editor is not null)
@@ -324,8 +330,52 @@ public sealed partial class MainWindow
         ? new FontIcon { Glyph = info.Glyph }
         : new FontIcon { Glyph = info.Glyph, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily(info.GlyphFont), FontSize = 13 };
 
+    /// <summary>Typeface and size apply to both editors and are kept in preferences.</summary>
+    internal void SetTypography(string? typeface = null, double? fontSize = null)
+    {
+        typeface = Typesetting.NormalizeTypeface(typeface ?? _settings.Typeface);
+        double size = Typesetting.Snap(fontSize ?? _settings.FontSize);
+        if (typeface == _settings.Typeface && size == _settings.FontSize) return;
+        _settings.Typeface = typeface;
+        _settings.FontSize = size;
+        SaveSettings();
+        ApplyTypography();
+    }
+
+    private void ApplyTypography(bool render = true)
+    {
+        _sourceEditor.SetTypography(Typesetting.FontFamily(_settings.Typeface), _settings.FontSize);
+        foreach (var (typeface, item) in _typefaceItems) item.IsChecked = typeface == _settings.Typeface;
+        if (render && _mode != EditorMode.Source) RenderCurrent(true);
+        ZoomText.Text = Localization.Percent(_settings.FontSize / Typesetting.DefaultSize);
+    }
+
+    private readonly List<(string Typeface, RadioMenuFlyoutItem Item)> _typefaceItems = [];
+    private AppBarButton _typographyButton = null!;
+
     private void BuildFormatBar()
     {
+        var typography = new MenuFlyout();
+        foreach (var typeface in Typesetting.Typefaces)
+        {
+            var item = new RadioMenuFlyoutItem { GroupName = "Typeface", IsChecked = typeface == _settings.Typeface };
+            item.Click += (_, _) => SetTypography(typeface: typeface);
+            _typefaceItems.Add((typeface, item));
+            _localizers.Add(() => item.Text = Localization.Get(Typesetting.LabelKey(typeface)));
+            typography.Items.Add(item);
+        }
+        typography.Items.Add(new MenuFlyoutSeparator());
+        foreach (var (key, shortcut, handler) in new (string, string, RoutedEventHandler)[]
+            { ("ZoomIn", "Ctrl+=", ZoomIn_Click), ("ZoomOut", "Ctrl+-", ZoomOut_Click), ("ZoomReset", "Ctrl+0", ZoomReset_Click) })
+        {
+            var item = new MenuFlyoutItem();
+            item.Click += handler;
+            _localizers.Add(() => { item.Text = Localization.Get(key); item.KeyboardAcceleratorTextOverride = Localization.Shortcut(shortcut); });
+            typography.Items.Add(item);
+        }
+        _typographyButton = new AppBarButton { Icon = new FontIcon { Glyph = "" }, Flyout = typography };
+        _localizers.Add(() => { _typographyButton.Label = Localization.Get("Typography"); ToolTipService.SetToolTip(_typographyButton, _typographyButton.Label); });
+        FormatBar.PrimaryCommands.Add(_typographyButton);
         var style = new AppBarButton { Icon = new FontIcon { Glyph = "" }, Flyout = new MenuFlyout() };
         foreach (var item in StyleItems()) ((MenuFlyout)style.Flyout).Items.Add(item);
         _localizers.Add(() => { style.Label = Localization.Get("Style"); ToolTipService.SetToolTip(style, style.Label); });
@@ -443,6 +493,7 @@ public sealed partial class MainWindow
     {
         foreach (var localize in _localizers) localize();
         foreach (var (item, keys) in new (MenuFlyoutItem, string)[] { (UndoMenu, "Ctrl+Z"), (RedoMenu, "Ctrl+Y"), (SidebarMenu, "Ctrl+Shift+L"),
+            (ZoomInMenu, "Ctrl+="), (ZoomOutMenu, "Ctrl+-"), (ZoomResetMenu, "Ctrl+0"),
             (ViewSourceMenu, "Ctrl+Shift+1"), (ViewFormatMenu, "Ctrl+Shift+2"), (ViewSplitMenu, "Ctrl+Shift+3") })
             item.KeyboardAcceleratorTextOverride = Localization.Shortcut(keys);
         UpdateDocumentInfo();

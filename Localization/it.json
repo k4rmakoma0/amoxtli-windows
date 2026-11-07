@@ -173,5 +173,10 @@
   "Untitled": "Senza titolo",
   "WelcomeEditing": "Passa tra **Sorgente**, **Formattato** e **Diviso** in alto nella finestra. Scrivi Markdown in Sorgente, applica gli stili dalla barra degli strumenti o dal menu **Formato** e salva con **Ctrl+S**.",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Maiusc"
+  "KeyShift": "Maiusc",
+  "Typography": "Tipografia",
+  "Typeface": "Carattere",
+  "TypefaceSystem": "Sistema",
+  "TypefaceSerif": "Graziato",
+  "TypefaceMonospace": "Monospaziato"
 }

@@ -173,5 +173,10 @@
   "Untitled": "未命名",
   "WelcomeEditing": "在窗口顶部切换 **源码**、**格式** 和 **分栏**。在源码中编写 Markdown，通过工具栏或 **格式** 菜单应用样式，并按 **Ctrl+S** 保存。",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Shift"
+  "KeyShift": "Shift",
+  "Typography": "排版",
+  "Typeface": "字体",
+  "TypefaceSystem": "系统",
+  "TypefaceSerif": "衬线",
+  "TypefaceMonospace": "等宽"
 }

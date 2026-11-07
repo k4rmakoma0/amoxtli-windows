@@ -173,5 +173,10 @@
   "Untitled": "無題",
   "WelcomeEditing": "ウィンドウ上部で **ソース**、**書式**、**分割** を切り替えます。ソースで Markdown を書き、ツールバーまたは **書式** メニューでスタイルを適用し、**Ctrl+S** で保存します。",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Shift"
+  "KeyShift": "Shift",
+  "Typography": "タイポグラフィ",
+  "Typeface": "書体",
+  "TypefaceSystem": "システム",
+  "TypefaceSerif": "セリフ",
+  "TypefaceMonospace": "等幅"
 }

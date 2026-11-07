@@ -173,5 +173,10 @@
   "Untitled": "بلا عنوان",
   "WelcomeEditing": "بدّل بين **المصدر** و**التنسيق** و**مقسوم** في أعلى النافذة. اكتب Markdown في المصدر، وطبّق الأنماط من شريط الأدوات أو قائمة **تنسيق**، واحفظ باستخدام **Ctrl+S**.",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Shift"
+  "KeyShift": "Shift",
+  "Typography": "الطباعة",
+  "Typeface": "نوع الخط",
+  "TypefaceSystem": "النظام",
+  "TypefaceSerif": "مذيّل",
+  "TypefaceMonospace": "ثابت العرض"
 }

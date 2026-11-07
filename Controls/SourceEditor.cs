@@ -222,7 +222,7 @@ internal sealed class SourceEditor : Grid
         try
         {
             var plain = Box.Document.GetRange(start, end).CharacterFormat;
-            plain.Name = _fontFamily;
+            plain.Name = _fontFamily.Split(',')[0].Trim();
             plain.Size = (float)_fontSize;
             plain.Bold = FormatEffect.Off;
             plain.Italic = FormatEffect.Off;

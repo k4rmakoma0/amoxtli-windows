@@ -173,5 +173,10 @@
   "Untitled": "Sem título",
   "WelcomeEditing": "Alterne entre **Código**, **Formato** e **Dividido** na parte superior da janela. Escreva Markdown em Código, aplique estilos pela barra de ferramentas ou pelo menu **Formatar** e salve com **Ctrl+S**.",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Shift"
+  "KeyShift": "Shift",
+  "Typography": "Tipografia",
+  "Typeface": "Tipo de letra",
+  "TypefaceSystem": "Sistema",
+  "TypefaceSerif": "Serifada",
+  "TypefaceMonospace": "Monoespaçada"
 }

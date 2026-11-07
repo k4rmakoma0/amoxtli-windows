@@ -60,9 +60,9 @@
                 <RadioMenuFlyoutItem x:Name="ViewFormatMenu" GroupName="EditorMode" services:LocalizedText.Text="ViewFormat" Click="ViewMode_Click" Tag="Format" KeyboardAcceleratorTextOverride="Ctrl+Shift+2" IsChecked="True"/>
                 <RadioMenuFlyoutItem x:Name="ViewSplitMenu" GroupName="EditorMode" services:LocalizedText.Text="ViewSplit" Click="ViewMode_Click" Tag="Split" KeyboardAcceleratorTextOverride="Ctrl+Shift+3"/>
                 <MenuFlyoutSeparator/>
-                <MenuFlyoutItem services:LocalizedText.Text="ZoomIn" Click="ZoomIn_Click"/>
-                <MenuFlyoutItem services:LocalizedText.Text="ZoomOut" Click="ZoomOut_Click"/>
-                <MenuFlyoutItem services:LocalizedText.Text="ZoomReset" Click="ZoomReset_Click"/>
+                <MenuFlyoutItem x:Name="ZoomInMenu" services:LocalizedText.Text="ZoomIn" Click="ZoomIn_Click"/>
+                <MenuFlyoutItem x:Name="ZoomOutMenu" services:LocalizedText.Text="ZoomOut" Click="ZoomOut_Click"/>
+                <MenuFlyoutItem x:Name="ZoomResetMenu" services:LocalizedText.Text="ZoomReset" Click="ZoomReset_Click"/>
             </MenuBarItem>
             <MenuBarItem x:Name="FormatMenu" services:LocalizedText.Text="MenuFormat"/>
             <MenuBarItem services:LocalizedText.Text="MenuHelp">
@@ -93,7 +93,7 @@
                 <Button Click="Settings_Click" services:LocalizedText.ToolTip="Preferences" services:LocalizedText.Name="Preferences"><FontIcon Glyph="&#xE713;" FontSize="16"/></Button>
             </StackPanel>
         </Grid>
-        <CommandBar x:Name="FormatBar" Grid.Row="2" Margin="8,-8,8,4" HorizontalAlignment="Left" Background="Transparent" DefaultLabelPosition="Collapsed" IsDynamicOverflowEnabled="True" OverflowButtonVisibility="Auto" IsEnabled="False"/>
+        <CommandBar x:Name="FormatBar" Grid.Row="2" Margin="8,-8,8,4" HorizontalAlignment="Left" Background="Transparent" DefaultLabelPosition="Collapsed" IsDynamicOverflowEnabled="True" OverflowButtonVisibility="Auto"/>
         <InfoBar x:Name="Notice" Grid.Row="3" IsOpen="False" Margin="12,0,12,8" Severity="Informational"/>
         <!-- A sibling receives the reader's shadow without adding a sidebar divider. -->
         <Grid x:Name="WorkspaceShadowReceiver" Grid.Row="4" Background="Transparent" IsHitTestVisible="False"/>

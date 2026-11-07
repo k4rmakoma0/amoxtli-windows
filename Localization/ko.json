@@ -173,5 +173,10 @@
   "Untitled": "제목 없음",
   "WelcomeEditing": "창 위쪽에서 **소스**, **서식**, **분할**을 전환하세요. 소스에서 Markdown을 작성하고, 도구 모음이나 **서식** 메뉴로 스타일을 적용한 뒤 **Ctrl+S**로 저장하세요.",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Shift"
+  "KeyShift": "Shift",
+  "Typography": "타이포그래피",
+  "Typeface": "글꼴",
+  "TypefaceSystem": "시스템",
+  "TypefaceSerif": "세리프",
+  "TypefaceMonospace": "고정폭"
 }

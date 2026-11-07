@@ -173,5 +173,10 @@
   "Untitled": "Sans titre",
   "WelcomeEditing": "Passez de **Source** à **Mise en forme** ou **Partagé** en haut de la fenêtre. Écrivez le Markdown dans Source, appliquez des styles depuis la barre d’outils ou le menu **Format** et enregistrez avec **Ctrl+S**.",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Maj"
+  "KeyShift": "Maj",
+  "Typography": "Typographie",
+  "Typeface": "Police",
+  "TypefaceSystem": "Système",
+  "TypefaceSerif": "Avec empattements",
+  "TypefaceMonospace": "Chasse fixe"
 }

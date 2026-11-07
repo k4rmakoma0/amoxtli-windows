@@ -173,5 +173,10 @@
   "Untitled": "Unbenannt",
   "WelcomeEditing": "Wechseln Sie oben im Fenster zwischen **Quelltext**, **Formatiert** und **Geteilt**. Schreiben Sie Markdown im Quelltext, wenden Sie Formate über die Symbolleiste oder das Menü **Format** an und speichern Sie mit **Strg+S**.",
   "KeyCtrl": "Strg",
-  "KeyShift": "Umschalt"
+  "KeyShift": "Umschalt",
+  "Typography": "Typografie",
+  "Typeface": "Schriftart",
+  "TypefaceSystem": "System",
+  "TypefaceSerif": "Serifen",
+  "TypefaceMonospace": "Festbreitenschrift"
 }

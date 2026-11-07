@@ -43,6 +43,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
     private readonly Dictionary<string, FrameworkElement> _anchors = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(RichTextBlock Text, List<(Hyperlink Link, string Url)> Links)> _links = [];
     private readonly double _font;
+    private readonly FontFamily _family;
     private readonly Brush _foreground;
     private readonly Brush _secondary;
     private readonly Brush _stroke;
@@ -55,6 +56,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
     {
         _imageSlots = imageSlots ?? new(4);
         _host = host; _settings = settings; _path = path; _openLink = openLink; _report = report; _font = settings.FontSize;
+        _family = new FontFamily(Typesetting.FontFamily(settings.Typeface));
         bool dark = host.ActualTheme == ElementTheme.Dark;
         bool highContrast = new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast;
         _foreground = highContrast ? Resource("TextFillColorPrimaryBrush") : new SolidColorBrush(dark ? Colors.WhiteSmoke : Windows.UI.Color.FromArgb(255, 32, 32, 32));
@@ -116,7 +118,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     var task = (item.FirstOrDefault() as ParagraphBlock)?.Inline?.FirstChild as TaskList;
                     if (task is null)
-                        row.Children.Add(new TextBlock { Text = list.IsOrdered ? $"{number++}." : "•", FontSize = _font, MinWidth = 22, Margin = new Thickness(4, 5, 0, 0), Foreground = _secondary, TextAlignment = TextAlignment.Right });
+                        row.Children.Add(new TextBlock { Text = list.IsOrdered ? $"{number++}." : "•", FontFamily = _family, FontSize = _font, MinWidth = 22, Margin = new Thickness(4, 5, 0, 0), Foreground = _secondary, TextAlignment = TextAlignment.Right });
                     else
                     {
                         var check = new CheckBox { IsChecked = task.Checked, IsHitTestVisible = false, IsTabStop = false, MinWidth = 22, MinHeight = 24, Margin = new Thickness(0, 0, 0, 0) };
@@ -154,7 +156,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
                 {
                     var body = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
                     _anchors[$"fn:{FootnoteLabel(footnote)}"] = body;
-                    var label = new TextBlock { Text = $"{footnote.Order}. ", FontWeight = FontWeights.SemiBold, FontSize = _font * .85 };
+                    var label = new TextBlock { Text = $"{footnote.Order}. ", FontWeight = FontWeights.SemiBold, FontFamily = _family, FontSize = _font * .85 };
                     body.Children.Add(label);
                     foreach (var child in footnote) AddBlock(body, child, depth + 1);
                     target.Children.Add(body);
@@ -189,7 +191,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
 
     private RichTextBlock Rich(ContainerInline? inline, double? size = null)
     {
-        var text = new RichTextBlock { FontSize = size ?? _font, Foreground = _foreground, IsTextSelectionEnabled = true, TextReadingOrder = TextReadingOrder.DetectFromContent, TextAlignment = TextAlignment.DetectFromContent, TextWrapping = TextWrapping.Wrap, LineHeight = (size ?? _font) * 1.55, Margin = new Thickness(0, 3, 0, 10) };
+        var text = new RichTextBlock { FontFamily = _family, FontSize = size ?? _font, Foreground = _foreground, IsTextSelectionEnabled = true, TextReadingOrder = TextReadingOrder.DetectFromContent, TextAlignment = TextAlignment.DetectFromContent, TextWrapping = TextWrapping.Wrap, LineHeight = (size ?? _font) * 1.55, Margin = new Thickness(0, 3, 0, 10) };
         var paragraph = new Paragraph();
         var links = new List<(Hyperlink Link, string Url)>();
         AppendInlines(paragraph.Inlines, inline, links, text);

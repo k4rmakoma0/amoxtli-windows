@@ -60,6 +60,7 @@ public sealed partial class MainWindow
             preferences.ThemePicker.SelectedIndex = 2;
             preferences.RemoteImages.IsOn = false;
             preferences.TextSize.Value = 23;
+            preferences.TypefacePicker.SelectedIndex = 1;
             preferences.DefaultAppPrompt.IsChecked = false;
             string appLanguage = Localization.CurrentLanguage;
             string appMenu = Root.Children.OfType<MenuBar>().First().Items[0].Title;
@@ -71,10 +72,10 @@ public sealed partial class MainWindow
                     && preferences.PrimaryButtonText == DialogText("Save") && preferences.CloseButtonText == DialogText("Cancel")
                     && preferences.LanguagePicker.Header?.ToString() == DialogText("Language") && preferences.ThemePicker.Header?.ToString() == DialogText("Theme")
                     && preferences.RemoteImages.Header?.ToString() == DialogText("RemoteImages") && preferences.RemoteImages.OnContent?.ToString() == DialogText("On")
-                    && preferences.RemoteImages.OffContent?.ToString() == DialogText("Off") && preferences.TextSize.Header?.ToString() == DialogText("FontSize")
+                    && preferences.RemoteImages.OffContent?.ToString() == DialogText("Off") && preferences.TextSize.Header?.ToString() == DialogText("FontSize") && preferences.TypefacePicker.Header?.ToString() == DialogText("Typeface")
                     && (preferences.DefaultAppPrompt.Content as TextBlock)?.Text == DialogText("DefaultAppPrompt"));
                 Check($"Vista previa conserva opciones pendientes: {option.Code}", preferences.ThemePicker.SelectedIndex == 2 && !preferences.RemoteImages.IsOn
-                    && preferences.TextSize.Value == 23 && preferences.DefaultAppPrompt.IsChecked == false
+                    && preferences.TextSize.Value == 22 && preferences.TypefacePicker.SelectedIndex == 1 && preferences.DefaultAppPrompt.IsChecked == false
                     && (preferences.LanguagePicker.SelectedItem as LanguageOption)?.Code == option.Code);
                 Check($"Vista previa no modifica app ni preferencias: {option.Code}", Localization.CurrentLanguage == appLanguage
                     && Root.Children.OfType<MenuBar>().First().Items[0].Title == appMenu
@@ -92,7 +93,7 @@ public sealed partial class MainWindow
                 && reopenedPreferences.DefaultAppPrompt.IsChecked == true && Localization.CurrentLanguage == appLanguage);
             preferences.LanguagePicker.SelectedItem = ((IEnumerable<LanguageOption>)preferences.LanguagePicker.ItemsSource).First(item => item.Code == "en");
             preferences.ApplyTo(previewSettings);
-            Check("Guardar aplica idioma y opciones de la vista previa", previewSettings is { Language: "en", Theme: "Dark", RemoteImages: false, FontSize: 23, PromptForDefaultApp: false });
+            Check("Guardar aplica idioma y opciones de la vista previa", previewSettings is { Language: "en", Theme: "Dark", RemoteImages: false, FontSize: 22, Typeface: "Serif", PromptForDefaultApp: false });
             var previousSettings = JsonSerializer.Deserialize<ReaderSettings>("{\"NavigationOpen\":false}");
             Check("Preferencias anteriores habilitan sugerencia de app predeterminada", previousSettings is { NavigationOpen: false, PromptForDefaultApp: true });
             var rememberedSettings = JsonSerializer.Deserialize<ReaderSettings>(JsonSerializer.Serialize(new ReaderSettings { PromptForDefaultApp = false }));

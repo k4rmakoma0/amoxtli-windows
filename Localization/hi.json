@@ -173,5 +173,10 @@
   "Untitled": "शीर्षकहीन",
   "WelcomeEditing": "विंडो के ऊपर **स्रोत**, **स्वरूप** और **विभाजित** के बीच बदलें। स्रोत में Markdown लिखें, टूलबार या **स्वरूप** मेनू से शैलियाँ लागू करें, और **Ctrl+S** से सहेजें।",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Shift"
+  "KeyShift": "Shift",
+  "Typography": "टाइपोग्राफ़ी",
+  "Typeface": "टाइपफ़ेस",
+  "TypefaceSystem": "सिस्टम",
+  "TypefaceSerif": "सेरिफ़",
+  "TypefaceMonospace": "मोनोस्पेस"
 }

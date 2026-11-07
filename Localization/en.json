@@ -173,5 +173,10 @@
   "Untitled": "Untitled",
   "WelcomeEditing": "Switch between **Source**, **Format** and **Split** at the top of the window. Write Markdown in Source, apply styles from the toolbar or the **Format** menu, and save with **Ctrl+S**.",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Shift"
+  "KeyShift": "Shift",
+  "Typography": "Typography",
+  "Typeface": "Typeface",
+  "TypefaceSystem": "System",
+  "TypefaceSerif": "Serif",
+  "TypefaceMonospace": "Monospaced"
 }

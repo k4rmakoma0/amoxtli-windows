@@ -173,5 +173,10 @@
   "Untitled": "Sin título",
   "WelcomeEditing": "Cambia entre **Fuente**, **Formato** y **Dividido** en la parte superior de la ventana. Escribe Markdown en Fuente, aplica estilos desde la barra de herramientas o el menú **Formato** y guarda con **Ctrl+S**.",
   "KeyCtrl": "Ctrl",
-  "KeyShift": "Mayús"
+  "KeyShift": "Mayús",
+  "Typography": "Tipografía",
+  "Typeface": "Tipo de letra",
+  "TypefaceSystem": "Sistema",
+  "TypefaceSerif": "Serif",
+  "TypefaceMonospace": "Monoespaciada"
 }

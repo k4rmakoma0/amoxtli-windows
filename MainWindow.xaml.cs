@@ -237,7 +237,7 @@ public sealed partial class MainWindow : Window
             }
             ShowAnalysis(parsed);
             UpdateDocumentInfo();
-            ZoomText.Text = Localization.Percent(_settings.FontSize / 16);
+            ZoomText.Text = Localization.Percent(_settings.FontSize / Typesetting.DefaultSize);
             BackButton.IsEnabled = _historyIndex > 0;
             ForwardButton.IsEnabled = _historyIndex < _history.Count - 1;
             _matches = _renderer?.Search(SearchBox.Text) ?? [];
@@ -521,15 +521,9 @@ public sealed partial class MainWindow : Window
         ToolTipService.SetToolTip(SidebarButton, $"{action} ({Localization.Shortcut("Ctrl+Shift+L")})");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SidebarButton, action);
     }
-    private void ZoomIn_Click(object sender, RoutedEventArgs e) => ChangeFont(1);
-    private void ZoomOut_Click(object sender, RoutedEventArgs e) => ChangeFont(-1);
-    private void ZoomReset_Click(object sender, RoutedEventArgs e) => ChangeFont(16 - _settings.FontSize);
-    private void ChangeFont(double delta)
-    {
-        _settings.FontSize = Math.Clamp(_settings.FontSize + delta, 12, 28);
-        SaveSettings(); RenderCurrent(true);
-        _sourceEditor.SetTypography(SourceFontFamily, _settings.FontSize);
-    }
+    private void ZoomIn_Click(object sender, RoutedEventArgs e) => SetTypography(fontSize: Typesetting.Step(_settings.FontSize, 1));
+    private void ZoomOut_Click(object sender, RoutedEventArgs e) => SetTypography(fontSize: Typesetting.Step(_settings.FontSize, -1));
+    private void ZoomReset_Click(object sender, RoutedEventArgs e) => SetTypography(fontSize: Typesetting.DefaultSize);
 
     private void Find_Click(object sender, RoutedEventArgs e)
     {
@@ -586,7 +580,7 @@ public sealed partial class MainWindow : Window
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
                 dialog.ApplyTo(_settings);
-                SaveSettings(); ApplyTheme(); ApplyLanguage();
+                SaveSettings(); ApplyTheme(); ApplyLanguage(); ApplyTypography(render: false);
             }
         }
         finally { _dialogOpen = false; }
