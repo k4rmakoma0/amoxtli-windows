@@ -178,5 +178,6 @@
   "Typeface": "टाइपफ़ेस",
   "TypefaceSystem": "सिस्टम",
   "TypefaceSerif": "सेरिफ़",
-  "TypefaceMonospace": "मोनोस्पेस"
+  "TypefaceMonospace": "मोनोस्पेस",
+  "ListLevel": "स्तर {0}"
 }

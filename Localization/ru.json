@@ -178,5 +178,6 @@
   "Typeface": "Шрифт",
   "TypefaceSystem": "Системный",
   "TypefaceSerif": "С засечками",
-  "TypefaceMonospace": "Моноширинный"
+  "TypefaceMonospace": "Моноширинный",
+  "ListLevel": "уровень {0}"
 }

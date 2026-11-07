@@ -178,5 +178,6 @@
   "Typeface": "نوع الخط",
   "TypefaceSystem": "النظام",
   "TypefaceSerif": "مذيّل",
-  "TypefaceMonospace": "ثابت العرض"
+  "TypefaceMonospace": "ثابت العرض",
+  "ListLevel": "المستوى {0}"
 }

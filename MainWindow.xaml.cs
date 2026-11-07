@@ -229,7 +229,13 @@ public sealed partial class MainWindow : Window
             _renderer?.Dispose();
             _renderer = null;
             _readerStale = _mode == EditorMode.Source;
-            if (_readerStale) DocumentPanel.Children.Clear();
+            UpdateFormatSurface();
+            if (_readerStale || FormatEditing)
+            {
+                DocumentPanel.Children.Clear();
+                // The Format editor reloads for another document or text changed elsewhere, never for its own edits.
+                if (FormatEditing && (!preserveOffset || _formatEditor.Markdown != document.Source)) _formatEditor.Load(document.Source, document.Path);
+            }
             else
             {
                 _renderer = new NativeMarkdownRenderer(DocumentPanel, _settings, document.Path, OpenLinkAsync, message => Notify(message, InfoBarSeverity.Warning));
@@ -240,7 +246,7 @@ public sealed partial class MainWindow : Window
             ZoomText.Text = Localization.Percent(_settings.FontSize / Typesetting.DefaultSize);
             BackButton.IsEnabled = _historyIndex > 0;
             ForwardButton.IsEnabled = _historyIndex < _history.Count - 1;
-            _matches = _renderer?.Search(SearchBox.Text) ?? [];
+            _matches = SearchDocument(SearchBox.Text);
             _matchIndex = -1; UpdateSearchCount();
             DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
             {
@@ -294,12 +300,20 @@ public sealed partial class MainWindow : Window
         id = Uri.UnescapeDataString(id);
         if (id.Length == 0) { ReaderScroll.ChangeView(null, 0, null); return; }
         if (_mode == EditorMode.Source) SetMode(EditorMode.Format);
+        if (FormatEditing && _document is not null)
+        {
+            int index = MarkdownService.GetHeadings(MarkdownService.Parse(_document.Source)).FindIndex(h => string.Equals(h.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0 && _formatEditor.Heading(index) is { } heading) { heading.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = true, VerticalAlignmentRatio = 0.1 }); return; }
+        }
         if (_renderer?.ResolveAnchor(id) is { } element) ScrollTo(element);
         else Notify(Localization.Format("HeadingMissing", id), InfoBarSeverity.Warning);
     }
 
+    private List<FrameworkElement> SearchDocument(string query) => FormatEditing ? _formatEditor.Search(query) : _renderer?.Search(query) ?? [];
+
     private void ScrollTo(FrameworkElement element)
     {
+        if (FormatEditing) { _formatEditor.ShowMatch(element, SearchBox.Text); return; }
         element = _renderer?.PrepareForNavigation(element) ?? element;
         DocumentPanel.UpdateLayout();
         var position = element.TransformToVisual(DocumentPanel).TransformPoint(new Windows.Foundation.Point());
@@ -532,7 +546,7 @@ public sealed partial class MainWindow : Window
     }
     private void Search_TextChanged(object sender, TextChangedEventArgs e)
     {
-        _matches = _renderer?.Search(SearchBox.Text) ?? []; _matchIndex = -1;
+        _matches = SearchDocument(SearchBox.Text); _matchIndex = -1;
         if (_matches.Count > 0) MoveMatch(1); else UpdateSearchCount();
     }
     private void MoveMatch(int delta)
@@ -551,7 +565,11 @@ public sealed partial class MainWindow : Window
         else if (e.Key == VirtualKey.Escape) { CloseFind_Click(sender, e); e.Handled = true; }
     }
     private void Reader_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e) => UpdateProgress();
-    private void UpdateProgress() => ProgressText.Text = Localization.Percent(ReaderScroll.ScrollableHeight <= 0 ? 1 : ReaderScroll.VerticalOffset / ReaderScroll.ScrollableHeight);
+    private void UpdateProgress()
+    {
+        var scroll = FormatEditing ? _formatEditor.Scroll : ReaderScroll;
+        ProgressText.Text = Localization.Percent(scroll.ScrollableHeight <= 0 ? 1 : scroll.VerticalOffset / scroll.ScrollableHeight);
+    }
 
     private void Root_DragOver(object sender, DragEventArgs e)
     {

@@ -178,5 +178,6 @@
   "Typeface": "글꼴",
   "TypefaceSystem": "시스템",
   "TypefaceSerif": "세리프",
-  "TypefaceMonospace": "고정폭"
+  "TypefaceMonospace": "고정폭",
+  "ListLevel": "수준 {0}"
 }

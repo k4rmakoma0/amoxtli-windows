@@ -178,5 +178,6 @@
   "Typeface": "Tipo de letra",
   "TypefaceSystem": "Sistema",
   "TypefaceSerif": "Serif",
-  "TypefaceMonospace": "Monoespaciada"
+  "TypefaceMonospace": "Monoespaciada",
+  "ListLevel": "nivel {0}"
 }

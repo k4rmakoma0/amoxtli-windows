@@ -137,6 +137,7 @@
                 <Grid x:Name="EditorArea" Grid.Row="1">
                     <Grid.ColumnDefinitions><ColumnDefinition x:Name="SourceColumn" Width="0"/><ColumnDefinition x:Name="DividerColumn" Width="0"/><ColumnDefinition x:Name="ReaderColumn" Width="*"/></Grid.ColumnDefinitions>
                     <Border x:Name="SourceHost" Visibility="Collapsed" FlowDirection="LeftToRight"/>
+                    <Border x:Name="FormatHost" Grid.Column="2" Visibility="Collapsed"/>
                     <Border x:Name="SplitDivider" Grid.Column="1" Width="1" Visibility="Collapsed" Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
                     <ScrollViewer x:Name="ReaderScroll" Grid.Column="2" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" ViewChanged="Reader_ViewChanged">
                         <StackPanel x:Name="DocumentPanel" MaxWidth="920" Padding="40,32,40,64" HorizontalAlignment="Stretch" Spacing="4"/>

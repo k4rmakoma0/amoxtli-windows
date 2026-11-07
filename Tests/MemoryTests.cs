@@ -36,6 +36,7 @@ public sealed partial class MainWindow
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
             File.WriteAllText(reportPath, JsonSerializer.Serialize(new { samples, error }, new JsonSerializerOptions { WriteIndented = true }));
         }
+        _useReader = true;
         try
         {
             _settings.RemoteImages = false;

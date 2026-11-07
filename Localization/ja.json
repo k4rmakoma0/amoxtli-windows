@@ -178,5 +178,6 @@
   "Typeface": "書体",
   "TypefaceSystem": "システム",
   "TypefaceSerif": "セリフ",
-  "TypefaceMonospace": "等幅"
+  "TypefaceMonospace": "等幅",
+  "ListLevel": "レベル {0}"
 }

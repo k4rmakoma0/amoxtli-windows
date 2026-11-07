@@ -178,5 +178,6 @@
   "Typeface": "Schriftart",
   "TypefaceSystem": "System",
   "TypefaceSerif": "Serifen",
-  "TypefaceMonospace": "Festbreitenschrift"
+  "TypefaceMonospace": "Festbreitenschrift",
+  "ListLevel": "Ebene {0}"
 }

@@ -24,11 +24,17 @@ public sealed partial class MainWindow
     {
         var results = new List<object>();
         int passed = 0, failed = 0;
+        // The last check reached is on disk even if the process dies, to locate crashes.
+        string progress = Path.ChangeExtension(Path.GetFullPath(reportPath), ".progress.txt");
+        File.WriteAllText(progress, "");
         void Check(string name, bool condition, string? detail = null)
         {
             if (condition) passed++; else failed++;
             results.Add(new { name, passed = condition, detail = condition ? null : detail });
+            File.AppendAllText(progress, name + Environment.NewLine);
         }
+        // These tests cover the read-only reader; the Format editor has its own.
+        _useReader = true;
         try
         {
             var oldLanguageSettings = JsonSerializer.Deserialize<ReaderSettings>("{\"Theme\":\"Dark\"}");
@@ -343,6 +349,9 @@ public sealed partial class MainWindow
         try { RunFormatModelTests(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el modelo de Formato", passed = false, detail = ex.ToString() }); }
         try { await RunEditorTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
+        _useReader = false;
+        try { await RunFormatEditorTestsAsync(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new { passed, failed, results }, new JsonSerializerOptions { WriteIndented = true }));

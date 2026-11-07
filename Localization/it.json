@@ -178,5 +178,6 @@
   "Typeface": "Carattere",
   "TypefaceSystem": "Sistema",
   "TypefaceSerif": "Graziato",
-  "TypefaceMonospace": "Monospaziato"
+  "TypefaceMonospace": "Monospaziato",
+  "ListLevel": "livello {0}"
 }

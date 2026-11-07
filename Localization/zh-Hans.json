@@ -178,5 +178,6 @@
   "Typeface": "字体",
   "TypefaceSystem": "系统",
   "TypefaceSerif": "衬线",
-  "TypefaceMonospace": "等宽"
+  "TypefaceMonospace": "等宽",
+  "ListLevel": "第 {0} 级"
 }

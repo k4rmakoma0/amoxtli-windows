@@ -178,5 +178,6 @@
   "Typeface": "Typeface",
   "TypefaceSystem": "System",
   "TypefaceSerif": "Serif",
-  "TypefaceMonospace": "Monospaced"
+  "TypefaceMonospace": "Monospaced",
+  "ListLevel": "level {0}"
 }

@@ -32,11 +32,10 @@ internal sealed class SourceEditor : Grid
     private string _text = "";
     private bool _suppress, _contentChanging, _composing, _realized;
     private int _styledLines, _pendingFirst = -1, _pendingLast = -1;
-    private Palette _palette;
+    private EditorPalette _palette;
     private string _fontFamily = "Segoe UI";
     private double _fontSize = 16;
 
-    private readonly record struct Palette(Color Text, Color Syntax, Color Accent, Color CodeBackground);
 
     public RichEditBox Box { get; }
     public string Text => _text;
@@ -79,13 +78,13 @@ internal sealed class SourceEditor : Grid
         Box.PreviewKeyDown += Box_PreviewKeyDown;
         Box.TextCompositionStarted += (_, _) => _composing = true;
         Box.TextCompositionEnded += (_, _) => { _composing = false; StylePending(); };
-        Box.ActualThemeChanged += (_, _) => { _palette = CreatePalette(); RestyleAll(); };
+        Box.ActualThemeChanged += (_, _) => { _palette = EditorPalette.For(Box.ActualTheme); RestyleAll(); };
         Box.SizeChanged += (_, args) => { if (!_realized && args.NewSize.Width > 0) { _realized = true; Reload(); } };
         Children.Add(Box);
         _styleTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _styleTimer.Interval = TimeSpan.FromMilliseconds(15);
         _styleTimer.Tick += (_, _) => StyleNextBatch();
-        _palette = CreatePalette();
+        _palette = EditorPalette.For(Box.ActualTheme);
     }
 
     public (int Start, int Length) Selection
@@ -104,9 +103,7 @@ internal sealed class SourceEditor : Grid
         _text = text;
         _history.Clear();
         _suppress = true;
-        // The text box turns a trailing paragraph mark into its own final one; add ours so a
-        // final line break in the file stays part of the text.
-        try { Box.Document.SetText(TextSetOptions.None, ToBox(text) + "\r"); }
+        try { Box.Document.SetText(TextSetOptions.None, ToBox(text)); }
         finally { _suppress = false; }
         _contentChanging = false;
         _highlighter.Reset(text);
@@ -124,7 +121,7 @@ internal sealed class SourceEditor : Grid
         if (_contentChanging) Box_TextChanged(Box, new RoutedEventArgs());
         var (start, length) = Selection;
         _suppress = true;
-        try { Box.Document.SetText(TextSetOptions.None, ToBox(_text) + "\r"); }
+        try { Box.Document.SetText(TextSetOptions.None, ToBox(_text)); }
         finally { _suppress = false; }
         _contentChanging = false;
         RestyleAll();
@@ -140,6 +137,25 @@ internal sealed class SourceEditor : Grid
 
     /// <summary>A programmatic edit: a formatting tool, Return in a list, paste, undo or redo.</summary>
     public void Apply(TextEdit edit, bool typing = false) => Apply(edit, typing, true);
+
+    /// <summary>
+    /// The text changed in the other editor: apply only the difference, keeping caret, scroll and
+    /// highlighting. Its own undo steps no longer match the text, so they are dropped.
+    /// </summary>
+    public void Replace(string text)
+    {
+        if (text == _text) return;
+        var edit = TextDiff.Compute(_text, text);
+        var (start, length) = Selection;
+        _suppress = true;
+        try { Box.Document.GetRange(edit.Start, edit.Start + edit.Length).SetText(TextSetOptions.None, ToBox(edit.Text)); }
+        finally { _suppress = false; }
+        Commit(edit, text, false, false);
+        _history.Clear();
+        int Map(int position) => position <= edit.Start ? position : position >= edit.Start + edit.Length ? position + edit.Delta : edit.Start + edit.Text.Length;
+        int newStart = Map(start);
+        Select(newStart, Math.Max(0, Map(start + length) - newStart), false);
+    }
 
     public void Undo() { if (_history.Undo() is { } edit) Apply(edit, false, false); }
     public void Redo() { if (_history.Redo() is { } edit) Apply(edit, false, false); }
@@ -331,9 +347,9 @@ internal sealed class SourceEditor : Grid
 
     internal string ReadBox()
     {
+        // The text box's own final paragraph mark is not part of the text it returns.
         Box.Document.GetText(TextGetOptions.UseLf, out string text);
-        // The text box always ends with a paragraph mark that is not part of the document.
-        return text.EndsWith('\n') ? text[..^1] : text;
+        return text;
     }
 
     private static string ToBox(string text) => text.Replace('\n', '\r');
@@ -346,27 +362,5 @@ internal sealed class SourceEditor : Grid
         if (Down(VirtualKey.Shift)) result |= VirtualKeyModifiers.Shift;
         if (Down(VirtualKey.Menu)) result |= VirtualKeyModifiers.Menu;
         return result;
-    }
-
-    private Palette CreatePalette()
-    {
-        bool dark = Box.ActualTheme == ElementTheme.Dark;
-        bool highContrast = new AccessibilitySettings().HighContrast;
-        var settings = new UISettings();
-        var accent = settings.GetColorValue(dark ? UIColorType.AccentLight2 : UIColorType.AccentDark1);
-        // Rich text has no alpha: blend the surface opacities onto the reading surface.
-        static Color Blend(byte surface, byte ink, double alpha)
-        {
-            byte value = (byte)Math.Round(surface + (ink - surface) * alpha);
-            return Color.FromArgb(255, value, value, value);
-        }
-        if (highContrast)
-        {
-            var text = settings.UIElementColor(UIElementType.WindowText);
-            return new Palette(text, text, settings.UIElementColor(UIElementType.Hotlight), Blend(dark ? (byte)0 : (byte)255, dark ? (byte)255 : (byte)0, 0.16));
-        }
-        return dark
-            ? new Palette(Color.FromArgb(255, 255, 255, 255), Color.FromArgb(255, 154, 154, 154), accent, Blend(43, 255, 0.13))
-            : new Palette(Color.FromArgb(255, 26, 26, 26), Color.FromArgb(255, 122, 122, 122), accent, Blend(250, 0, 0.075));
     }
 }

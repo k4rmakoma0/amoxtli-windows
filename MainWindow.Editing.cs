@@ -22,6 +22,12 @@ public sealed partial class MainWindow
     internal enum EditorMode { Source, Format, Split }
     private EditorMode _mode = EditorMode.Format;
     private SourceEditor _sourceEditor = null!;
+    private FormatEditor _formatEditor = null!;
+    /// <summary>The read-only renderer stands in for the Format editor (documents over the editing limit, reader tests).</summary>
+    private bool _useReader;
+    private bool _formatFocused;
+    /// <summary>Documents larger than this are formatted by the read-only reader; edit them in Source.</summary>
+    internal const int FormatEditingLimit = 1_000_000;
     private DispatcherQueueTimer _editTimer = null!;
     private DispatcherQueueTimer _toolStateTimer = null!;
     private readonly Dictionary<(VirtualKey Key, VirtualKeyModifiers Modifiers), Action> _shortcuts = [];
@@ -31,7 +37,11 @@ public sealed partial class MainWindow
     private int _analysisRevision;
     private bool _readerStale, _updatingTools, _closeConfirmed;
 
-    private SourceEditor? ActiveEditor => _mode != EditorMode.Format && _document is not null ? _sourceEditor : null;
+    /// <summary>The Format editor is shown in place of the reader.</summary>
+    private bool FormatEditing => _mode != EditorMode.Source && !_useReader && _document is not null && _document.Source.Length <= FormatEditingLimit;
+    /// <summary>Tools act on the last editor with focus: Format in Format mode, either one in Split.</summary>
+    private bool FormatActive => FormatEditing && (_mode == EditorMode.Format || _formatFocused);
+    private SourceEditor? ActiveEditor => _mode != EditorMode.Format && _document is not null && !FormatActive ? _sourceEditor : null;
 
     private void InitializeEditing()
     {
@@ -40,8 +50,16 @@ public sealed partial class MainWindow
         _sourceEditor.Edited += SourceEditor_Edited;
         _sourceEditor.SelectionMoved += ScheduleToolStates;
         _sourceEditor.Shortcut = TryShortcut;
-        _sourceEditor.Box.ContextFlyout = BuildContextMenu();
+        _sourceEditor.Box.ContextFlyout = BuildContextMenu(false);
         SourceHost.Child = _sourceEditor;
+        _sourceEditor.Box.GotFocus += (_, _) => _formatFocused = false;
+        _formatEditor = new FormatEditor(_settings, OpenLinkAsync, message => Notify(message, InfoBarSeverity.Warning)) { Shortcut = TryShortcut };
+        _formatEditor.ContextMenu = BuildContextMenu(true);
+        _formatEditor.Edited += FormatEditor_Edited;
+        _formatEditor.SelectionMoved += ScheduleToolStates;
+        _formatEditor.FocusEntered += () => _formatFocused = true;
+        _formatEditor.Scroll.ViewChanged += (_, _) => UpdateProgress();
+        FormatHost.Child = _formatEditor;
         _editTimer = DispatcherQueue.CreateTimer();
         _editTimer.Interval = TimeSpan.FromMilliseconds(200);
         _editTimer.IsRepeating = false;
@@ -84,14 +102,14 @@ public sealed partial class MainWindow
         _shortcuts[(VirtualKey.Number2, CtrlShift)] = () => SetMode(EditorMode.Format);
         _shortcuts[(VirtualKey.Number3, CtrlShift)] = () => SetMode(EditorMode.Split);
         _shortcuts[(VirtualKey.L, CtrlShift)] = () => SetSidebarOpen(!NavigationSplit.IsPaneOpen);
-        _shortcuts[(VirtualKey.Z, Ctrl)] = () => ActiveEditor?.Undo();
+        _shortcuts[(VirtualKey.Z, Ctrl)] = Undo;
         // Ctrl+= and Ctrl++ (Shift on many layouts, or the keypad) increase; Ctrl+- decreases.
         foreach (var key in new[] { (VirtualKey)187, VirtualKey.Add })
             foreach (var modifiers in new[] { Ctrl, CtrlShift })
                 _shortcuts[(key, modifiers)] = () => SetTypography(fontSize: Typesetting.Step(_settings.FontSize, 1));
         _shortcuts[((VirtualKey)189, Ctrl)] = _shortcuts[(VirtualKey.Subtract, Ctrl)] = () => SetTypography(fontSize: Typesetting.Step(_settings.FontSize, -1));
         _shortcuts[(VirtualKey.Number0, Ctrl)] = _shortcuts[(VirtualKey.NumberPad0, Ctrl)] = () => SetTypography(fontSize: Typesetting.DefaultSize);
-        _shortcuts[(VirtualKey.Y, Ctrl)] = () => ActiveEditor?.Redo();
+        _shortcuts[(VirtualKey.Y, Ctrl)] = Redo;
     }
 
     private bool TryShortcut(VirtualKey key, VirtualKeyModifiers modifiers)
@@ -122,16 +140,27 @@ public sealed partial class MainWindow
         ReaderColumn.Width = reader ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         DividerColumn.Width = mode == EditorMode.Split ? GridLength.Auto : new GridLength(0);
         SourceHost.Visibility = source ? Visibility.Visible : Visibility.Collapsed;
-        ReaderScroll.Visibility = reader ? Visibility.Visible : Visibility.Collapsed;
         SplitDivider.Visibility = mode == EditorMode.Split ? Visibility.Visible : Visibility.Collapsed;
-        // Closing the source editor releases its text and its undo steps.
+        UpdateFormatSurface();
+        // Closing an editor releases its text and its undo steps.
         if (source && !wasSource) LoadEditor();
         else if (!source) _sourceEditor.Load("");
+        if (!source) _formatFocused = true;
+        else if (!reader) _formatFocused = false;
         if (reader && _readerStale) RenderCurrent(true);
-        else if (!reader) { _renderer?.Dispose(); _renderer = null; DocumentPanel.Children.Clear(); _readerStale = true; _matches = []; }
+        else if (!reader) { _renderer?.Dispose(); _renderer = null; DocumentPanel.Children.Clear(); _formatEditor.Clear(); _readerStale = true; _matches = []; }
         UpdateModeControls();
         UpdateToolStates();
         if (source) _sourceEditor.Box.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>Format and Split show the Format editor, or the reader for documents over the editing limit.</summary>
+    private void UpdateFormatSurface()
+    {
+        bool reader = _mode != EditorMode.Source;
+        FormatHost.Visibility = reader && FormatEditing ? Visibility.Visible : Visibility.Collapsed;
+        ReaderScroll.Visibility = reader && !FormatEditing ? Visibility.Visible : Visibility.Collapsed;
+        if (!FormatEditing) _formatEditor.Clear();
     }
 
     private void UpdateModeControls()
@@ -162,6 +191,21 @@ public sealed partial class MainWindow
         _editTimer.Stop();
         _editTimer.Start();
     }
+
+    private void FormatEditor_Edited()
+    {
+        if (_document is null) return;
+        bool wasDirty = _document.IsDirty;
+        UpdateDocument(_document with { Source = _formatEditor.Markdown });
+        if (wasDirty != _document.IsDirty) UpdateDocumentInfo();
+        // Source takes only the difference, keeping its caret, scroll and highlighting.
+        if (_mode == EditorMode.Split) _sourceEditor.Replace(_formatEditor.Markdown);
+        _editTimer.Stop();
+        _editTimer.Start();
+    }
+
+    private void Undo() { if (FormatActive) _formatEditor.Undo(); else ActiveEditor?.Undo(); }
+    private void Redo() { if (FormatActive) _formatEditor.Redo(); else ActiveEditor?.Redo(); }
 
     private void UpdateDocument(ReadingDocument document)
     {
@@ -210,7 +254,14 @@ public sealed partial class MainWindow
 
     private async void RunTool(MarkdownTool tool)
     {
-        if (_updatingTools || ActiveEditor is not { } editor) return;
+        if (_updatingTools) return;
+        if (FormatActive)
+        {
+            if (!_formatEditor.Toggle(tool)) await InsertFormatLinkAsync();
+            UpdateToolStates();
+            return;
+        }
+        if (ActiveEditor is not { } editor) return;
         var (start, length) = editor.Selection;
         if (tool == MarkdownTool.Link && SourceFormatter.FindLink(editor.Text, start, length) is null)
         {
@@ -223,7 +274,9 @@ public sealed partial class MainWindow
 
     private void SetHeading(int level)
     {
-        if (_updatingTools || ActiveEditor is not { } editor) return;
+        if (_updatingTools) return;
+        if (FormatActive) { _formatEditor.SetHeading(level); UpdateToolStates(); return; }
+        if (ActiveEditor is not { } editor) return;
         var (start, length) = editor.Selection;
         if (SourceFormatter.SetHeading(editor.Text, start, length, level) is { } edit) editor.Apply(edit);
         FinishTool(editor);
@@ -231,6 +284,7 @@ public sealed partial class MainWindow
 
     private void InsertThematicBreak()
     {
+        if (FormatActive) { _formatEditor.InsertRule(); return; }
         if (ActiveEditor is not { } editor) return;
         var (start, length) = editor.Selection;
         editor.Apply(SourceFormatter.InsertThematicBreak(editor.Text, start, length));
@@ -252,18 +306,34 @@ public sealed partial class MainWindow
         finally { _dialogOpen = false; FinishTool(editor); }
     }
 
+    private async Task InsertFormatLinkAsync()
+    {
+        if (_dialogOpen) return;
+        var dialog = new InsertLinkDialog(_formatEditor.SelectedText.Split('\n')[0]) { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, FlowDirection = Root.FlowDirection };
+        _dialogOpen = true;
+        try
+        {
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary && SourceFormatter.NormalizeAddress(dialog.Address.Text) is { } address)
+                _formatEditor.InsertLink(dialog.LinkText.Text, address);
+        }
+        finally { _dialogOpen = false; _formatEditor.ActiveField?.Box.Focus(FocusState.Programmatic); }
+    }
+
     private async Task InsertTableAsync()
     {
-        if (_dialogOpen || ActiveEditor is not { } editor) return;
+        bool format = FormatActive;
+        if (_dialogOpen || !format && ActiveEditor is null) return;
         var dialog = new InsertTableDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, FlowDirection = Root.FlowDirection };
         _dialogOpen = true;
         try
         {
             if (await dialog.ShowAsync() != ContentDialogResult.Primary || !dialog.IsValid) return;
+            if (format) { _formatEditor.InsertTable((int)dialog.Columns.Value, (int)dialog.Rows.Value); return; }
+            if (ActiveEditor is not { } editor) return;
             var (start, length) = editor.Selection;
             editor.Apply(SourceFormatter.InsertTable(editor.Text, start, length, (int)dialog.Columns.Value, (int)dialog.Rows.Value));
         }
-        finally { _dialogOpen = false; FinishTool(editor); }
+        finally { _dialogOpen = false; if (ActiveEditor is { } editor) FinishTool(editor); }
     }
 
     private void FinishTool(SourceEditor editor)
@@ -282,11 +352,13 @@ public sealed partial class MainWindow
     private void UpdateToolStates()
     {
         var editor = ActiveEditor;
+        bool enabled = editor is not null || FormatActive;
         // Typography also applies to the formatted view, so it stays available.
-        foreach (var command in FormatBar.PrimaryCommands.OfType<Control>()) command.IsEnabled = editor is not null || command == _typographyButton;
-        foreach (var item in FormatMenu.Items) item.IsEnabled = editor is not null;
+        foreach (var command in FormatBar.PrimaryCommands.OfType<Control>()) command.IsEnabled = enabled || command == _typographyButton;
+        foreach (var item in FormatMenu.Items) item.IsEnabled = enabled;
         var state = FormatState.None;
-        if (editor is not null)
+        if (FormatActive) state = _formatEditor.GetState();
+        else if (editor is not null)
         {
             var (start, length) = editor.Selection;
             state = SourceFormatter.GetState(editor.Text, start, length, editor.Highlighter);
@@ -295,7 +367,7 @@ public sealed partial class MainWindow
         try
         {
             foreach (var (tool, setChecked) in _toolChecks) setChecked(state.Has(tool));
-            foreach (var (level, item) in _styleItems) item.IsChecked = editor is not null && state.HeadingLevel == level;
+            foreach (var (level, item) in _styleItems) item.IsChecked = enabled && state.HeadingLevel == level;
         }
         finally { _updatingTools = false; }
     }
@@ -345,6 +417,7 @@ public sealed partial class MainWindow
     private void ApplyTypography(bool render = true)
     {
         _sourceEditor.SetTypography(Typesetting.FontFamily(_settings.Typeface), _settings.FontSize);
+        if (FormatEditing) _formatEditor.Refresh();
         foreach (var (typeface, item) in _typefaceItems) item.IsChecked = typeface == _settings.Typeface;
         if (render && _mode != EditorMode.Source) RenderCurrent(true);
         ZoomText.Text = Localization.Percent(_settings.FontSize / Typesetting.DefaultSize);
@@ -461,8 +534,10 @@ public sealed partial class MainWindow
         }
     }
 
-    private MenuFlyout BuildContextMenu()
+    /// <summary>Cut, Copy, Paste, Format ▸, Select all, for the source editor or the focused Format field.</summary>
+    private MenuFlyout BuildContextMenu(bool format)
     {
+        RichEditBox? Target() => format ? _formatEditor.ActiveField?.Box : _sourceEditor.Box;
         var menu = new MenuFlyout();
         MenuFlyoutItem Command(string key, string shortcut, Action action)
         {
@@ -472,18 +547,24 @@ public sealed partial class MainWindow
             menu.Items.Add(item);
             return item;
         }
-        var cut = Command("Cut", "Ctrl+X", () => _sourceEditor.Cut());
-        var copy = Command("Copy", "Ctrl+C", () => _sourceEditor.Copy());
-        Command("Paste", "Ctrl+V", () => _sourceEditor.Paste());
-        var format = new MenuFlyoutSubItem();
-        foreach (var item in FormatItems()) format.Items.Add(item);
-        _localizers.Add(() => format.Text = Localization.Get("MenuFormat"));
-        menu.Items.Add(format);
+        var cut = Command("Cut", "Ctrl+X", () => Target()?.Document.Selection.Cut());
+        var copy = Command("Copy", "Ctrl+C", () => Target()?.Document.Selection.Copy());
+        Command("Paste", "Ctrl+V", async () =>
+        {
+            if (!format) { _sourceEditor.Paste(); return; }
+            var content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+            if (Target() is { } box && content.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text))
+                box.Document.Selection.TypeText((await content.GetTextAsync()).Replace("\r\n", "\n").Replace('\n', '\v'));
+        });
+        var formatMenu = new MenuFlyoutSubItem();
+        foreach (var item in FormatItems()) formatMenu.Items.Add(item);
+        _localizers.Add(() => formatMenu.Text = Localization.Get("MenuFormat"));
+        menu.Items.Add(formatMenu);
         menu.Items.Add(new MenuFlyoutSeparator());
-        Command("SelectAll", "Ctrl+A", () => _sourceEditor.SelectAll());
+        Command("SelectAll", "Ctrl+A", () => { if (Target() is { } box) box.Document.Selection.SetRange(0, int.MaxValue); });
         menu.Opening += (_, _) =>
         {
-            cut.IsEnabled = copy.IsEnabled = _sourceEditor.Selection.Length > 0;
+            cut.IsEnabled = copy.IsEnabled = Target()?.Document.Selection.Length > 0;
             UpdateToolStates();
         };
         return menu;
@@ -499,8 +580,8 @@ public sealed partial class MainWindow
         UpdateDocumentInfo();
     }
 
-    private void Undo_Click(object sender, RoutedEventArgs e) => ActiveEditor?.Undo();
-    private void Redo_Click(object sender, RoutedEventArgs e) => ActiveEditor?.Redo();
+    private void Undo_Click(object sender, RoutedEventArgs e) => Undo();
+    private void Redo_Click(object sender, RoutedEventArgs e) => Redo();
 
     // Saving
 
