@@ -340,6 +340,8 @@ public sealed partial class MainWindow
                 && !(Notice.IsOpen && Notice.Severity == InfoBarSeverity.Error));
         }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada", passed = false, detail = ex.ToString() }); }
+        try { RunFormatModelTests(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el modelo de Formato", passed = false, detail = ex.ToString() }); }
         try { await RunEditorTestsAsync(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
