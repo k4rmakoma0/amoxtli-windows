@@ -24,16 +24,13 @@ namespace Amoxtli.Controls;
 internal sealed class SourceEditor : Grid
 {
     private const int StyleBatch = 600;
-    /// <summary>
-    /// Recorded on code runs, but the WinUI 3 text box (Windows App SDK 2.6) draws every run in the
-    /// control's font and ignores per-run font names; the background is what marks code today.
-    /// </summary>
+    /// <summary>Per-run font names must be static fonts: variable Cascadia Mono does not resolve in rich text.</summary>
     internal const string MonospaceFont = "Consolas";
     private readonly SourceHighlighter _highlighter = new();
     private readonly EditHistory _history = new();
     private readonly DispatcherQueueTimer _styleTimer;
     private string _text = "";
-    private bool _suppress, _contentChanging, _composing;
+    private bool _suppress, _contentChanging, _composing, _realized;
     private int _styledLines, _pendingFirst = -1, _pendingLast = -1;
     private Palette _palette;
     private string _fontFamily = "Segoe UI";
@@ -83,6 +80,7 @@ internal sealed class SourceEditor : Grid
         Box.TextCompositionStarted += (_, _) => _composing = true;
         Box.TextCompositionEnded += (_, _) => { _composing = false; StylePending(); };
         Box.ActualThemeChanged += (_, _) => { _palette = CreatePalette(); RestyleAll(); };
+        Box.SizeChanged += (_, args) => { if (!_realized && args.NewSize.Width > 0) { _realized = true; Reload(); } };
         Children.Add(Box);
         _styleTimer = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _styleTimer.Interval = TimeSpan.FromMilliseconds(15);
@@ -114,6 +112,21 @@ internal sealed class SourceEditor : Grid
         _highlighter.Reset(text);
         RestyleAll();
         Select(Math.Min(caret, text.Length), 0, false);
+    }
+
+    /// <summary>
+    /// Font names applied before the text box is first laid out are dropped (other formatting
+    /// survives), and it starts hidden, so the text is set and styled again once it has a size.
+    /// </summary>
+    private void Reload()
+    {
+        var (start, length) = Selection;
+        _suppress = true;
+        try { Box.Document.SetText(TextSetOptions.None, ToBox(_text) + "\r"); }
+        finally { _suppress = false; }
+        _contentChanging = false;
+        RestyleAll();
+        Select(start, length, false);
     }
 
     public void SetTypography(string fontFamily, double fontSize)
