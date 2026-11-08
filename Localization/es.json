@@ -179,5 +179,8 @@
   "TypefaceSystem": "Sistema",
   "TypefaceSerif": "Serif",
   "TypefaceMonospace": "Monoespaciada",
-  "ListLevel": "nivel {0}"
+  "ListLevel": "nivel {0}",
+  "CodeLanguage": "Lenguaje",
+  "NoLanguage": "Ninguno",
+  "ChooseLanguage": "Elegir lenguaje"
 }

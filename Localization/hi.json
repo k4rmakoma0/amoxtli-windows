@@ -179,5 +179,8 @@
   "TypefaceSystem": "सिस्टम",
   "TypefaceSerif": "सेरिफ़",
   "TypefaceMonospace": "मोनोस्पेस",
-  "ListLevel": "स्तर {0}"
+  "ListLevel": "स्तर {0}",
+  "CodeLanguage": "भाषा",
+  "NoLanguage": "कोई नहीं",
+  "ChooseLanguage": "भाषा चुनें"
 }

@@ -179,5 +179,8 @@
   "TypefaceSystem": "システム",
   "TypefaceSerif": "セリフ",
   "TypefaceMonospace": "等幅",
-  "ListLevel": "レベル {0}"
+  "ListLevel": "レベル {0}",
+  "CodeLanguage": "言語",
+  "NoLanguage": "なし",
+  "ChooseLanguage": "言語を選択"
 }

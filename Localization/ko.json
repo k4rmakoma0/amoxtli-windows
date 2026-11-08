@@ -179,5 +179,8 @@
   "TypefaceSystem": "시스템",
   "TypefaceSerif": "세리프",
   "TypefaceMonospace": "고정폭",
-  "ListLevel": "수준 {0}"
+  "ListLevel": "수준 {0}",
+  "CodeLanguage": "언어",
+  "NoLanguage": "없음",
+  "ChooseLanguage": "언어 선택"
 }

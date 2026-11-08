@@ -1,6 +1,7 @@
 namespace Amoxtli.Editing;
 
-public enum HighlightKind { Heading, Syntax, Bold, Italic, Underline, Strikethrough, Code, CodeBlock, LinkText, Quote, ListMarker }
+/// <summary>Token spans carry their <see cref="TokenKind"/> in <see cref="HighlightSpan.Level"/>.</summary>
+public enum HighlightKind { Heading, Syntax, Bold, Italic, Underline, Strikethrough, Code, CodeBlock, LinkText, Quote, ListMarker, Token }
 
 /// <summary>Absolute UTF-16 range. Later spans override earlier ones where they overlap.</summary>
 public readonly record struct HighlightSpan(int Start, int Length, HighlightKind Kind, int Level = 0);
@@ -31,8 +32,12 @@ public sealed class SourceHighlighter
         return index >= 0 ? index : ~index - 1;
     }
 
+    // Tokens of the code block opening at a line; a block is lexed whole so multi-line comments and strings come out right.
+    private readonly Dictionary<int, (int ContentStart, List<CodeToken> Tokens)> _blockTokens = [];
+
     public void Reset(string text)
     {
+        _blockTokens.Clear();
         _text = text;
         _lineStarts = LineStarts(text);
         _after = new List<FenceState?>(_lineStarts.Count);
@@ -63,6 +68,7 @@ public sealed class SourceHighlighter
         }
         for (; line < count; line++) after.Add(oldAfter[line - delta]);
         _after = after;
+        _blockTokens.Clear();
         return (first, last);
     }
 
@@ -80,6 +86,15 @@ public sealed class SourceHighlighter
         {
             Add(0, text.Length, HighlightKind.CodeBlock);
             if (_after[line] is null) Add(0, text.Length, HighlightKind.Syntax);
+            else
+            {
+                int end = start + text.Length;
+                foreach (var token in BlockTokens(line))
+                {
+                    int from = Math.Max(token.Start, start), to = Math.Min(token.Start + token.Length, end);
+                    if (from < to) spans.Add(new HighlightSpan(from, to - from, HighlightKind.Token, (int)token.Kind));
+                }
+            }
             return spans;
         }
         if (_after[line] is not null)
@@ -133,6 +148,30 @@ public sealed class SourceHighlighter
             Add(content + span.ContentEnd, span.Close, HighlightKind.Syntax);
         }
         return spans;
+    }
+
+    /// <summary>The first and last line of the fenced block holding <paramref name="line"/>, fences included.</summary>
+    public (int Open, int Close) BlockBounds(int line)
+    {
+        int open = line;
+        while (open > 0 && FenceBefore(open) is not null) open--;
+        int close = Math.Max(open + 1, line);
+        while (close < LineCount - 1 && _after[close] is not null) close++;
+        return (open, Math.Min(close, LineCount - 1));
+    }
+
+    /// <summary>The block's tokens in absolute offsets, lexed once per text version.</summary>
+    private List<CodeToken> BlockTokens(int line)
+    {
+        var (open, close) = BlockBounds(line);
+        if (_blockTokens.TryGetValue(open, out var cached)) return cached.Tokens;
+        int contentStart = open + 1 < LineCount ? _lineStarts[open + 1] : _text.Length;
+        int contentEnd = _after[close] is null && close > open ? Math.Max(contentStart, _lineStarts[close] - 1) : LineEnd(close);
+        var language = CodeLexer.Detect(_after[open]?.Info ?? "");
+        var tokens = CodeLexer.Tokenize(_text[contentStart..Math.Max(contentStart, contentEnd)], language)
+            .Select(token => token with { Start = token.Start + contentStart }).ToList();
+        _blockTokens[open] = (contentStart, tokens);
+        return tokens;
     }
 
     private ReadOnlySpan<char> Line(int line) => _text.AsSpan(_lineStarts[line], LineEnd(line) - _lineStarts[line]);

@@ -585,11 +585,19 @@ public sealed partial class MainWindow
         foreach (var item in FormatItems()) formatMenu.Items.Add(item);
         _localizers.Add(() => formatMenu.Text = Localization.Get("MenuFormat"));
         menu.Items.Add(formatMenu);
+        // In a Format code block: Language, with the same menu as the block's chip.
+        var language = new MenuFlyoutSubItem { Visibility = Visibility.Collapsed };
+        _localizers.Add(() => language.Text = Localization.Get("CodeLanguage"));
+        if (format) menu.Items.Add(language);
         menu.Items.Add(new MenuFlyoutSeparator());
         Command("SelectAll", "Ctrl+A", () => { if (Target() is { } box) box.Document.Selection.SetRange(0, int.MaxValue); });
         menu.Opening += (_, _) =>
         {
             cut.IsEnabled = copy.IsEnabled = Target()?.Document.Selection.Length > 0;
+            language.Items.Clear();
+            int? code = format ? _formatEditor.ActiveCodeParagraph : null;
+            if (code is int paragraph) foreach (var item in _formatEditor.LanguageItems(paragraph)) language.Items.Add(item);
+            language.Visibility = code is null ? Visibility.Collapsed : Visibility.Visible;
             UpdateToolStates();
         };
         return menu;

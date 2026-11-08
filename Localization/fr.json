@@ -179,5 +179,8 @@
   "TypefaceSystem": "Système",
   "TypefaceSerif": "Avec empattements",
   "TypefaceMonospace": "Chasse fixe",
-  "ListLevel": "niveau {0}"
+  "ListLevel": "niveau {0}",
+  "CodeLanguage": "Langage",
+  "NoLanguage": "Aucun",
+  "ChooseLanguage": "Choisir le langage"
 }

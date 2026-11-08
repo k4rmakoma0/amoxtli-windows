@@ -179,5 +179,8 @@
   "TypefaceSystem": "系统",
   "TypefaceSerif": "衬线",
   "TypefaceMonospace": "等宽",
-  "ListLevel": "第 {0} 级"
+  "ListLevel": "第 {0} 级",
+  "CodeLanguage": "语言",
+  "NoLanguage": "无",
+  "ChooseLanguage": "选择语言"
 }

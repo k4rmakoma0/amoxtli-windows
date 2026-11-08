@@ -179,5 +179,8 @@
   "TypefaceSystem": "النظام",
   "TypefaceSerif": "مذيّل",
   "TypefaceMonospace": "ثابت العرض",
-  "ListLevel": "المستوى {0}"
+  "ListLevel": "المستوى {0}",
+  "CodeLanguage": "اللغة",
+  "NoLanguage": "بلا",
+  "ChooseLanguage": "اختيار اللغة"
 }

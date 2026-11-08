@@ -262,6 +262,25 @@ internal sealed class RichField
     }
 
     /// <summary>What applies at the caret or across the selection.</summary>
+    /// <summary>Colors code tokens; the whole field is lexed so comments and strings across lines come out right.</summary>
+    public void Colorize(CodeLanguage language)
+    {
+        var tokens = CodeLexer.Tokenize(ReadText(), language);
+        _suppress = true;
+        Box.Document.BatchDisplayUpdates();
+        try
+        {
+            Box.Document.GetRange(0, Length).CharacterFormat.ForegroundColor = _palette.Text;
+            foreach (var token in tokens)
+                Box.Document.GetRange(token.Start, token.Start + token.Length).CharacterFormat.ForegroundColor = _palette.Token(token.Kind);
+        }
+        finally
+        {
+            Box.Document.ApplyDisplayUpdates();
+            _suppress = false;
+        }
+    }
+
     public InlineStyle ActiveStyles()
     {
         var (start, length) = Selection;

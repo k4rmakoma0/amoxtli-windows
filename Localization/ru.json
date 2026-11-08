@@ -179,5 +179,8 @@
   "TypefaceSystem": "Системный",
   "TypefaceSerif": "С засечками",
   "TypefaceMonospace": "Моноширинный",
-  "ListLevel": "уровень {0}"
+  "ListLevel": "уровень {0}",
+  "CodeLanguage": "Язык",
+  "NoLanguage": "Нет",
+  "ChooseLanguage": "Выбрать язык"
 }

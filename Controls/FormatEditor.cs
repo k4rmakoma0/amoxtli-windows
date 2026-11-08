@@ -185,21 +185,122 @@ internal sealed class FormatEditor : Grid
         return field.Box;
     }
 
+    /// <summary>A code block: a strip with the language chip at the top right, then the code, colored by language.</summary>
     private FrameworkElement CodeView(BlockView block)
     {
         var field = NewField(block, block.First, true, false);
         block.Field = field;
         var lines = Enumerable.Range(block.First, block.Last - block.First + 1).Select(i => _paragraphs[i].Text);
         field.SetContent([new InlineRun(string.Join("\n", lines))], _palette);
+        string info = _paragraphs[block.First].Info;
+        field.WhenRealized(() => field.Colorize(CodeLexer.Detect(info)));
+        var grid = new Grid { RowSpacing = 4 };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var chip = LanguageChip(block, info);
+        grid.Children.Add(chip);
+        Grid.SetRow(field.Box, 1);
+        grid.Children.Add(field.Box);
         return new Border
         {
-            Child = field.Box,
+            Child = grid,
             Background = new SolidColorBrush(_palette.CodeBackground),
             CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(16, 12, 16, 12),
+            Padding = new Thickness(16, 6, 8, 12),
             Margin = new Thickness(0, 4, 0, 8)
         };
     }
+
+    /// <summary>The chip shows a hand cursor, like a link.</summary>
+    internal sealed class LanguageButton : Button
+    {
+        public LanguageButton() => ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Hand);
+    }
+
+    /// <summary>The language name with a chevron, or "Choose Language"; an unknown fence word shows as written.</summary>
+    private Button LanguageChip(BlockView block, string info)
+    {
+        var language = CodeLexer.Detect(info);
+        string word = CodeLexer.FirstWord(info);
+        string label = language != CodeLanguage.None ? CodeLexer.Name(language) : word.Length > 0 ? word : Localization.Get("ChooseLanguage");
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        content.Children.Add(new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(new FontIcon { Glyph = "\uE70D", FontSize = 10, VerticalAlignment = VerticalAlignment.Center });
+        var chip = new LanguageButton
+        {
+            Content = content,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(10, 2, 8, 3),
+            MinHeight = 0,
+            CornerRadius = new CornerRadius(6),
+            Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+            BorderThickness = new Thickness(0),
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            IsTabStop = true,
+            Tag = block
+        };
+        AutomationProperties.SetName(chip, $"{Localization.Get("CodeLanguage")}: {label}");
+        chip.Click += (_, _) => OpenLanguageMenu(chip);
+        return chip;
+    }
+
+    /// <summary>Clicking the chip moves the caret into its block when it was elsewhere, then opens the menu below it.</summary>
+    internal void OpenLanguageMenu(Button chip)
+    {
+        if (chip.Tag is not BlockView block || block.Field is not { } field) return;
+        if (_focused != field) field.WhenRealized(() => { field.Box.Focus(FocusState.Programmatic); field.Select(0); });
+        var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedRight };
+        foreach (var item in LanguageItems(block)) menu.Items.Add(item);
+        menu.ShowAt(chip);
+    }
+
+    /// <summary>
+    /// "None", a separator, then the known languages in alphabetical order; the current one is checked.
+    /// An unknown fence word comes first, checked and disabled.
+    /// </summary>
+    internal List<MenuFlyoutItemBase> LanguageItems(int paragraph) =>
+        _blocks.FirstOrDefault(b => b.Kind == BlockKind.Code && paragraph >= b.First && paragraph <= b.Last) is { } block ? LanguageItems(block) : [];
+
+    private List<MenuFlyoutItemBase> LanguageItems(BlockView block)
+    {
+        string info = _paragraphs[block.First].Info;
+        var current = CodeLexer.Detect(info);
+        string word = CodeLexer.FirstWord(info);
+        var items = new List<MenuFlyoutItemBase>();
+        if (current == CodeLanguage.None && word.Length > 0)
+        {
+            items.Add(new ToggleMenuFlyoutItem { Text = word, IsChecked = true, IsEnabled = false });
+            items.Add(new MenuFlyoutSeparator());
+        }
+        RadioMenuFlyoutItem Item(string text, CodeLanguage language)
+        {
+            var item = new RadioMenuFlyoutItem { Text = text, GroupName = "CodeLanguage", IsChecked = language == current && (language != CodeLanguage.None || word.Length == 0) };
+            item.Click += (_, _) => SetLanguage(block.First, language);
+            return item;
+        }
+        items.Add(Item(Localization.Get("NoLanguage"), CodeLanguage.None));
+        items.Add(new MenuFlyoutSeparator());
+        foreach (var language in CodeLexer.Known) items.Add(Item(CodeLexer.Name(language), language));
+        return items;
+    }
+
+    /// <summary>
+    /// Changes the language of the whole block holding <paramref name="paragraph"/>, as one undo step: the fence gets
+    /// the language's word (the rest of the info string stays), or nothing for None.
+    /// </summary>
+    internal void SetLanguage(int paragraph, CodeLanguage language)
+    {
+        var p = _paragraphs[paragraph];
+        if (p.Kind != BlockKind.Code) return;
+        string rest = p.Info.Trim()[CodeLexer.FirstWord(p.Info).Length..].Trim();
+        string info = language == CodeLanguage.None ? "" : (CodeLexer.Fence(language) + " " + rest).Trim();
+        var result = _paragraphs.Select(x => x.Kind == BlockKind.Code && x.BlockId == p.BlockId ? x with { Info = info } : x).ToList();
+        var position = Position is { } at && at.Paragraph >= 0 ? at : (paragraph, 0);
+        Restructure(new FormatOperations.Result(result, position.Item1, position.Item2));
+    }
+
+    /// <summary>The code block holding the caret, for the context menu's Language submenu.</summary>
+    internal int? ActiveCodeParagraph => Position is { } at && _paragraphs[at.Paragraph].Kind == BlockKind.Code ? at.Paragraph : null;
 
     private FrameworkElement TableView(BlockView block)
     {
@@ -337,6 +438,7 @@ internal sealed class FormatEditor : Grid
             int delta = code.Count - (block.Last - block.First + 1);
             _paragraphs = Replace(block.First, block.Last, code);
             Shift(block, delta);
+            field.Colorize(CodeLexer.Detect(template.Info));
             Commit(true);
             return;
         }

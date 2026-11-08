@@ -248,6 +248,9 @@ internal sealed class SourceEditor : Grid
         _text = text;
         if (record) _history.Record(before, edit, typing);
         var (first, last) = _highlighter.Update(text, edit);
+        // Editing any line of a code block recolors the whole block.
+        if (_highlighter.IsCode(first)) first = _highlighter.BlockBounds(first).Open;
+        if (_highlighter.IsCode(last)) last = _highlighter.BlockBounds(last).Close;
         if (first < _styledLines) _styledLines = Math.Clamp(_styledLines + _highlighter.LineCount - lines, first, _highlighter.LineCount);
         _pendingFirst = _pendingFirst < 0 ? first : Math.Min(_pendingFirst, first);
         _pendingLast = Math.Max(_pendingLast, last);
@@ -334,6 +337,7 @@ internal sealed class SourceEditor : Grid
                 break;
             case HighlightKind.LinkText:
             case HighlightKind.ListMarker: format.ForegroundColor = _palette.Accent; break;
+            case HighlightKind.Token: format.ForegroundColor = _palette.Token((TokenKind)span.Level); break;
         }
     }
 

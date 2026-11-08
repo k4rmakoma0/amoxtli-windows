@@ -346,6 +346,8 @@ public sealed partial class MainWindow
                 && !(Notice.IsOpen && Notice.Severity == InfoBarSeverity.Error));
         }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada", passed = false, detail = ex.ToString() }); }
+        try { RunLexerTests(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Lexer exception", passed = false, detail = ex.ToString() }); }
         try { RunFormatModelTests(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el modelo de Formato", passed = false, detail = ex.ToString() }); }
         try { await RunEditorTestsAsync(Check); }
@@ -353,6 +355,8 @@ public sealed partial class MainWindow
         _useReader = false;
         try { await RunFormatEditorTestsAsync(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
+        try { await RunCodeEditorTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Code editor exception", passed = false, detail = ex.ToString() }); }
         try { await RunSplitTestsAsync(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en Dividido", passed = false, detail = ex.ToString() }); }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
