@@ -292,6 +292,9 @@ internal sealed class SourceEditor : Grid
         else _styleTimer.Stop();
     }
 
+    /// <summary>Character formats take points, while the box's FontSize is in effective pixels (96 per inch).</summary>
+    internal static float Points(double pixels) => (float)(pixels * .75);
+
     private void StyleLines(int first, int last)
     {
         int start = _highlighter.LineStart(first), end = Math.Min(_text.Length, _highlighter.LineEnd(last) + 1);
@@ -301,7 +304,7 @@ internal sealed class SourceEditor : Grid
         {
             var plain = Box.Document.GetRange(start, end).CharacterFormat;
             plain.Name = _fontFamily.Split(',')[0].Trim();
-            plain.Size = (float)_fontSize;
+            plain.Size = Points(_fontSize);
             plain.Bold = FormatEffect.Off;
             plain.Italic = FormatEffect.Off;
             plain.Underline = UnderlineType.None;
@@ -324,7 +327,7 @@ internal sealed class SourceEditor : Grid
         switch (span.Kind)
         {
             case HighlightKind.Heading:
-                format.Size = (float)(_fontSize * span.Level switch { 1 => 1.6, 2 => 1.4, 3 => 1.25, 4 => 1.1, _ => 1.0 });
+                format.Size = Points(_fontSize * span.Level switch { 1 => 1.6, 2 => 1.4, 3 => 1.25, 4 => 1.1, _ => 1.0 });
                 format.Bold = FormatEffect.On;
                 break;
             case HighlightKind.Syntax:
