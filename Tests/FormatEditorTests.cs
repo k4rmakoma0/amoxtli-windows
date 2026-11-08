@@ -4,6 +4,7 @@ using Amoxtli.Editing;
 using Amoxtli.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Windows.System;
 
 namespace Amoxtli;
@@ -185,6 +186,36 @@ public sealed partial class MainWindow
         await Task.Delay(500);
         Check("Fuente actualiza Formato", _formatEditor.Markdown.StartsWith("Inicio\n\n# Título dividido") && _formatEditor.Fields[0].ReadText() == "Inicio", Show(_formatEditor.Markdown[..Math.Min(40, _formatEditor.Markdown.Length)]));
         SetMode(EditorMode.Format);
+
+        // Columns fit their text instead of collapsing to the minimum width.
+        const string shortcuts = "| Acción | Atajo |\n| --- | --- |\n| Buscar en el documento | Ctrl+F |\n| Guardar | Ctrl+S |\n";
+        Navigate(new ReadingDocument(shortcuts, null, "Atajos"), MarkdownService.Parse(shortcuts));
+        await Task.Delay(400);
+        var wide = _formatEditor.Fields.FirstOrDefault(f => f.ReadText() == "Buscar en el documento");
+        var shortcut = _formatEditor.Fields.FirstOrDefault(f => f.ReadText() == "Ctrl+F");
+        if (wide is null || shortcut is null)
+            throw new InvalidOperationException("Celdas: " + string.Join(" | ", _formatEditor.Fields.Select(f => $"'{f.ReadText()}' {f.IsRealized} {f.Box.ActualWidth}")));
+        var wideCell = (Border)VisualTreeHelper.GetParent(wide.Box);
+        var table = (Grid)VisualTreeHelper.GetParent(wideCell);
+        double natural0 = table.ColumnDefinitions[0].MaxWidth, natural1 = table.ColumnDefinitions[1].MaxWidth;
+        double room = ((FrameworkElement)VisualTreeHelper.GetParent(table)).ActualWidth;
+        // With room, a column gets its natural width; without, the columns shrink together to fit.
+        double expected0 = natural0 + natural1 <= room ? natural0 : room - Math.Max(72, Math.Floor(natural1 * room / (natural0 + natural1)));
+        Check("La columna cabe su texto", natural0 >= FormatEditor.CellWidth("Buscar en el documento", wide.Box, wideCell.Padding) - .5
+            && Math.Abs(table.ColumnDefinitions[0].ActualWidth - expected0) <= 2 && table.ActualWidth <= room + .5,
+            $"natural {natural0}, esperado {expected0}, real {table.ColumnDefinitions[0].ActualWidth}, tabla {table.ActualWidth}, espacio {room}");
+        Check("Una columna corta no se estira", natural1 < natural0 && table.ColumnDefinitions[1].ActualWidth <= natural1 + .5, $"{natural1} {table.ColumnDefinitions[1].ActualWidth}");
+        double rowHeight = wideCell.ActualHeight;
+        Check("Las filas de una línea miden lo mismo", _formatEditor.Fields.Where(f => f.ReadText() is "Guardar" or "Acción").All(f => Math.Abs(((Border)VisualTreeHelper.GetParent(f.Box)).ActualHeight - rowHeight) <= 1),
+            string.Join(", ", _formatEditor.Fields.Select(f => VisualTreeHelper.GetParent(f.Box)).OfType<Border>().Select(b => b.ActualHeight)));
+        shortcut.Box.Focus(FocusState.Programmatic);
+        shortcut.Select(shortcut.Length);
+        shortcut.Box.Document.Selection.TypeText(" o Mayús+F3 desde cualquier lugar");
+        await Task.Delay(400);
+        shortcut = _formatEditor.Fields.First(f => f.ReadText().StartsWith("Ctrl+F"));
+        table = (Grid)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(shortcut.Box));
+        Check("La columna crece al escribir", table.ColumnDefinitions[1].MaxWidth > natural1 + 100, $"{natural1} → {table.ColumnDefinitions[1].MaxWidth}");
+        if (_document is { IsDirty: true } edited) UpdateDocument(edited with { Source = edited.Saved });
 
         Navigate(new ReadingDocument("# Fin del Formato", null, "Fin"), MarkdownService.Parse("# Fin del Formato"));
     }

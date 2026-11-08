@@ -306,9 +306,49 @@ internal sealed class FormatEditor : Grid
     {
         var cells = Enumerable.Range(block.First, block.Last - block.First + 1).ToList();
         int columns = cells.Max(i => _paragraphs[i].Column) + 1, rows = cells.Max(i => _paragraphs[i].Row) + 1;
-        var grid = new Grid { Margin = new Thickness(0, 6, 0, 12), HorizontalAlignment = HorizontalAlignment.Left };
-        for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = 72 });
+        // A rich edit box sized by an Auto column only reports its minimum width, and its text arrives
+        // after the first layout; star columns measure their cells narrower than they end up, which
+        // leaves rows too tall. Columns get fixed widths measured from their text (kept as MaxWidth),
+        // scaled down together when the table is wider than the space it has.
+        var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
+        var host = new Border { Child = grid, Margin = new Thickness(0, 6, 0, 12), HorizontalAlignment = HorizontalAlignment.Stretch };
+        for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { MinWidth = TableColumnMinimum });
         for (int r = 0; r < rows; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var widths = new double[columns, rows];
+        void Layout()
+        {
+            // Columns that reach their minimum stop shrinking; the others share what is left.
+            double room = host.ActualWidth, scale = 1;
+            for (int pass = 0; pass < columns && room > 0; pass++)
+            {
+                double pinned = 0, flexible = 0;
+                foreach (var definition in grid.ColumnDefinitions)
+                    if (definition.MaxWidth * scale <= TableColumnMinimum) pinned += TableColumnMinimum; else flexible += definition.MaxWidth;
+                if (flexible == 0 || pinned + flexible * scale <= room) break;
+                scale = Math.Max(0, room - pinned) / flexible;
+            }
+            bool changed = false;
+            foreach (var definition in grid.ColumnDefinitions)
+            {
+                double width = Math.Floor(Math.Max(TableColumnMinimum, definition.MaxWidth * scale));
+                if (definition.Width.Value != width || !definition.Width.IsAbsolute) { definition.Width = new GridLength(width); changed = true; }
+            }
+            // A rich edit box measures its height from the line layout of its previous width, so after
+            // a column widens its row keeps the height of the wrapped text. Measuring again once the new
+            // width is arranged brings the row back to its text.
+            if (changed)
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    foreach (var child in grid.Children) if (child is Border { Child: RichEditBox box }) box.InvalidateMeasure();
+                });
+        }
+        void Fit(int column)
+        {
+            double natural = TableColumnMinimum;
+            for (int r = 0; r < rows; r++) natural = Math.Max(natural, widths[column, r]);
+            grid.ColumnDefinitions[column].MaxWidth = natural;
+        }
+        host.SizeChanged += (_, args) => { if (args.NewSize.Width != args.PreviousSize.Width) Layout(); };
         var stroke = new SolidColorBrush(EditorPalette.TableLineSurface(ActualTheme));
         var headerSurface = new SolidColorBrush(EditorPalette.TableHeaderSurface(ActualTheme));
         foreach (int i in cells)
@@ -335,9 +375,36 @@ internal sealed class FormatEditor : Grid
             };
             Grid.SetRow(cell, p.Row); Grid.SetColumn(cell, p.Column);
             grid.Children.Add(cell);
+            int column = p.Column, row = p.Row;
+            widths[column, row] = CellWidth(string.Concat(p.Runs.Select(run => run.Text)), field.Box, cell.Padding);
+            field.Changed += changed =>
+            {
+                changed.Box.Document.GetText(TextGetOptions.UseLf, out string text);
+                widths[column, row] = CellWidth(text, changed.Box, cell.Padding);
+                Fit(column);
+                Layout();
+            };
         }
+        for (int c = 0; c < columns; c++) Fit(c);
+        Layout();
         block.Field = _order.FirstOrDefault(entry => entry.Block == block).Field;
-        return grid;
+        return host;
+    }
+
+    private const double TableColumnMinimum = 72;
+
+    /// <summary>The width a cell needs to show its longest line unwrapped, caret and bold runs included.</summary>
+    internal static double CellWidth(string text, RichEditBox like, Thickness padding)
+    {
+        double widest = 0;
+        foreach (string line in text.Split('\n', '\r', '\v'))
+        {
+            if (line.Length == 0) continue;
+            var probe = new TextBlock { Text = line, FontSize = like.FontSize, FontFamily = like.FontFamily, FontWeight = like.FontWeight };
+            probe.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            widest = Math.Max(widest, probe.DesiredSize.Width);
+        }
+        return Math.Ceiling(widest * 1.06 + 8 + padding.Left + padding.Right);
     }
 
     /// <summary>Raw Markdown and images keep the reader's presentation; they are not edited here.</summary>
