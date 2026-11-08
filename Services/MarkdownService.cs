@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Amoxtli.Services;
 
-public sealed record HeadingInfo(string Title, string Id, int Level)
+public sealed record HeadingInfo(string Title, string Id, int Level, int Line = 0)
 {
     public Microsoft.UI.Xaml.Thickness Indent => new((Level - 1) * 12, 6, 0, 6);
 }
@@ -28,7 +28,47 @@ public static class MarkdownService
     public static MarkdownDocument Parse(string source) => Markdown.Parse(source, Pipeline);
 
     public static List<HeadingInfo> GetHeadings(MarkdownDocument document) => document.Descendants<HeadingBlock>()
-        .Select(h => new HeadingInfo(PlainText(h.Inline), h.GetAttributes().Id ?? "", h.Level)).ToList();
+        .Select(h => new HeadingInfo(PlainText(h.Inline), h.GetAttributes().Id ?? "", h.Level, h.Line)).ToList();
+
+    /// <summary>Words of headings, paragraphs, lists, quotes and tables: no code and no images.</summary>
+    public static int CountWords(MarkdownDocument document)
+    {
+        int words = 0;
+        foreach (var leaf in document.Descendants<LeafBlock>())
+            if (leaf is not CodeBlock && leaf.Inline is { } inline) words += CountWords(inline);
+        return words;
+    }
+
+    private static int CountWords(ContainerInline inline)
+    {
+        int words = 0;
+        bool inWord = false;
+        void Text(ReadOnlySpan<char> text)
+        {
+            foreach (char c in text)
+            {
+                bool letter = !char.IsWhiteSpace(c);
+                if (letter && !inWord) words++;
+                inWord = letter;
+            }
+        }
+        void Walk(ContainerInline container)
+        {
+            foreach (var child in container)
+            {
+                switch (child)
+                {
+                    case LiteralInline literal: Text(literal.Content.AsSpan()); break;
+                    case LineBreakInline: inWord = false; break;
+                    case LinkInline { IsImage: true }: break;
+                    case CodeInline: inWord = false; break;
+                    case ContainerInline nested: Walk(nested); break;
+                }
+            }
+        }
+        Walk(inline);
+        return words;
+    }
 
     public static string PlainText(ContainerInline? inline)
     {

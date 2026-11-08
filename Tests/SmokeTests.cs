@@ -24,11 +24,17 @@ public sealed partial class MainWindow
     {
         var results = new List<object>();
         int passed = 0, failed = 0;
+        // The last check reached is on disk even if the process dies, to locate crashes.
+        string progress = Path.ChangeExtension(Path.GetFullPath(reportPath), ".progress.txt");
+        File.WriteAllText(progress, "");
         void Check(string name, bool condition, string? detail = null)
         {
             if (condition) passed++; else failed++;
             results.Add(new { name, passed = condition, detail = condition ? null : detail });
+            File.AppendAllText(progress, name + Environment.NewLine);
         }
+        // These tests cover the read-only reader; the Format editor has its own.
+        _useReader = true;
         try
         {
             var oldLanguageSettings = JsonSerializer.Deserialize<ReaderSettings>("{\"Theme\":\"Dark\"}");
@@ -60,6 +66,7 @@ public sealed partial class MainWindow
             preferences.ThemePicker.SelectedIndex = 2;
             preferences.RemoteImages.IsOn = false;
             preferences.TextSize.Value = 23;
+            preferences.TypefacePicker.SelectedIndex = 1;
             preferences.DefaultAppPrompt.IsChecked = false;
             string appLanguage = Localization.CurrentLanguage;
             string appMenu = Root.Children.OfType<MenuBar>().First().Items[0].Title;
@@ -71,10 +78,10 @@ public sealed partial class MainWindow
                     && preferences.PrimaryButtonText == DialogText("Save") && preferences.CloseButtonText == DialogText("Cancel")
                     && preferences.LanguagePicker.Header?.ToString() == DialogText("Language") && preferences.ThemePicker.Header?.ToString() == DialogText("Theme")
                     && preferences.RemoteImages.Header?.ToString() == DialogText("RemoteImages") && preferences.RemoteImages.OnContent?.ToString() == DialogText("On")
-                    && preferences.RemoteImages.OffContent?.ToString() == DialogText("Off") && preferences.TextSize.Header?.ToString() == DialogText("FontSize")
+                    && preferences.RemoteImages.OffContent?.ToString() == DialogText("Off") && preferences.TextSize.Header?.ToString() == DialogText("FontSize") && preferences.TypefacePicker.Header?.ToString() == DialogText("Typeface")
                     && (preferences.DefaultAppPrompt.Content as TextBlock)?.Text == DialogText("DefaultAppPrompt"));
                 Check($"Vista previa conserva opciones pendientes: {option.Code}", preferences.ThemePicker.SelectedIndex == 2 && !preferences.RemoteImages.IsOn
-                    && preferences.TextSize.Value == 23 && preferences.DefaultAppPrompt.IsChecked == false
+                    && preferences.TextSize.Value == 22 && preferences.TypefacePicker.SelectedIndex == 1 && preferences.DefaultAppPrompt.IsChecked == false
                     && (preferences.LanguagePicker.SelectedItem as LanguageOption)?.Code == option.Code);
                 Check($"Vista previa no modifica app ni preferencias: {option.Code}", Localization.CurrentLanguage == appLanguage
                     && Root.Children.OfType<MenuBar>().First().Items[0].Title == appMenu
@@ -92,7 +99,7 @@ public sealed partial class MainWindow
                 && reopenedPreferences.DefaultAppPrompt.IsChecked == true && Localization.CurrentLanguage == appLanguage);
             preferences.LanguagePicker.SelectedItem = ((IEnumerable<LanguageOption>)preferences.LanguagePicker.ItemsSource).First(item => item.Code == "en");
             preferences.ApplyTo(previewSettings);
-            Check("Guardar aplica idioma y opciones de la vista previa", previewSettings is { Language: "en", Theme: "Dark", RemoteImages: false, FontSize: 23, PromptForDefaultApp: false });
+            Check("Guardar aplica idioma y opciones de la vista previa", previewSettings is { Language: "en", Theme: "Dark", RemoteImages: false, FontSize: 22, Typeface: "Serif", PromptForDefaultApp: false });
             var previousSettings = JsonSerializer.Deserialize<ReaderSettings>("{\"NavigationOpen\":false}");
             Check("Preferencias anteriores habilitan sugerencia de app predeterminada", previousSettings is { NavigationOpen: false, PromptForDefaultApp: true });
             var rememberedSettings = JsonSerializer.Deserialize<ReaderSettings>(JsonSerializer.Serialize(new ReaderSettings { PromptForDefaultApp = false }));
@@ -104,7 +111,7 @@ public sealed partial class MainWindow
                 var settingsUri = DefaultAppService.GetSettingsUri(appId);
                 Check("Configuración de app conserva identidad escapada", settingsUri.Scheme == "ms-settings" && Uri.UnescapeDataString(settingsUri.Query) == $"?registeredAUMID={appId}");
             }
-            const string sample = """
+            string sample = """
                 ---
                 title: Prueba
                 ---
@@ -143,7 +150,7 @@ public sealed partial class MainWindow
                 <script>alert('no ejecutar')</script>
 
                 [^uno]: Nota al pie.
-                """;
+                """.ReplaceLineEndings("\n");
             var parsed = MarkdownService.Parse(sample);
             var headings = MarkdownService.GetHeadings(parsed);
             Check("Encabezados con acentos", headings.Count == 3 && headings[0].Title == "Introducción");
@@ -203,13 +210,12 @@ public sealed partial class MainWindow
             _renderer.Search("");
             Check("Búsqueda limpia resaltados", richBlocks.All(t => t.TextHighlighters.Count == 0));
 
-            SetSource(true);
-            Check("Vista fuente", SourceScroll.Visibility == Visibility.Visible && SourceText?.Text == sample);
+            SetMode(EditorMode.Source);
+            Check("Vista fuente", SourceHost.Visibility == Visibility.Visible && ReaderScroll.Visibility == Visibility.Collapsed && _sourceEditor.Text == sample);
             RenderCurrent(true);
-            Check("Vista fuente conserva documento al volver a renderizar", SourceText?.Text == sample);
-            var previousSourceText = SourceText;
-            SetSource(false);
-            Check("Ocultar fuente libera el control y su texto", SourceScroll.Content is null && previousSourceText?.Text == "");
+            Check("Vista fuente conserva documento al volver a renderizar", _sourceEditor.Text == sample);
+            SetMode(EditorMode.Format);
+            Check("Cerrar fuente libera su texto", SourceHost.Visibility == Visibility.Collapsed && _sourceEditor.Text == "" && !_sourceEditor.CanUndo);
             JumpToAnchor(headings[0].Id);
             Check("Navegación por anclas", ReaderScroll.Visibility == Visibility.Visible);
 
@@ -223,9 +229,10 @@ public sealed partial class MainWindow
                 Check($"Cambio inmediato de interfaz: {option.Code}", Root.Children.OfType<MenuBar>().First().Items[0].Title == Localization.Get("MenuFile")
                     && NavigationPivot.Items.OfType<PivotItem>().First().Header?.ToString() == Localization.Get("Files")
                     && SearchBox.PlaceholderText == Localization.Get("Find") && SidebarMenu.Text == Localization.Get("Navigation"));
-                Check($"Documento e historial conservados: {option.Code}", _document?.Source == sample && SourceScroll.Content is null && _history.Count == languageHistory && _matches.Count == 1 && SearchBox.Text == "definición");
+                Check($"Documento e historial conservados: {option.Code}", _document?.Source == sample && _sourceEditor.Text == "" && _history.Count == languageHistory && _matches.Count == 1 && SearchBox.Text == "definición");
                 Check($"Dirección de interfaz correcta: {option.Code}", Root.FlowDirection == (option.Code == "ar" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight)
-                    && DocumentPanel.FlowDirection == FlowDirection.LeftToRight && SourceScroll.FlowDirection == FlowDirection.LeftToRight);
+                    && DocumentPanel.FlowDirection == FlowDirection.LeftToRight && SourceHost.FlowDirection == FlowDirection.LeftToRight
+                    && FormatMenu.Title == Localization.Get("MenuFormat") && ModeSourceButton.Content?.ToString() == Localization.Get("ModeSource"));
                 var languageElements = Descendants(DocumentPanel).ToList();
                 Check($"Controles del lector traducidos: {option.Code}", languageElements.OfType<Button>().Any(button => Equals(button.Content, Localization.Get("Copy")))
                     && _renderer!.Anchors.ContainsKey(headings[0].Id));
@@ -329,9 +336,9 @@ public sealed partial class MainWindow
             JumpToAnchor("inicio-virtual");
             await Task.Delay(100);
             Check("Regreso al inicio conserva virtualización", repeater is not null && Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(repeater) < repeater.ItemsSourceView.Count / 2);
-            SetSource(true);
-            Check("Vista fuente de documento virtual conserva el contenido completo", SourceText?.Text == virtualMarkdown);
-            SetSource(false);
+            SetMode(EditorMode.Source);
+            Check("Vista fuente de documento virtual conserva el contenido completo", _sourceEditor.Text == virtualMarkdown);
+            SetMode(EditorMode.Format);
             Navigate(new ReadingDocument("# Fin", null, "Fin"), MarkdownService.Parse("# Fin"));
             Check("Salir de documento virtual libera su origen de datos", repeater?.ItemsSource is null);
             Check("Cambiar de documento virtual representa el nuevo contenido sin errores", _renderer!.Anchors.ContainsKey("fin")
@@ -339,6 +346,21 @@ public sealed partial class MainWindow
                 && !(Notice.IsOpen && Notice.Severity == InfoBarSeverity.Error));
         }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada", passed = false, detail = ex.ToString() }); }
+        try { RunLexerTests(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Lexer exception", passed = false, detail = ex.ToString() }); }
+        try { RunFormatModelTests(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el modelo de Formato", passed = false, detail = ex.ToString() }); }
+        try { await RunEditorTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
+        _useReader = false;
+        try { await RunFormatEditorTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
+        try { await RunCodeEditorTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Code editor exception", passed = false, detail = ex.ToString() }); }
+        try { await RunFilesTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Files exception", passed = false, detail = ex.ToString() }); }
+        try { await RunSplitTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en Dividido", passed = false, detail = ex.ToString() }); }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new { passed, failed, results }, new JsonSerializerOptions { WriteIndented = true }));
     }

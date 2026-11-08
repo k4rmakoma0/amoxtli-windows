@@ -10,6 +10,7 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
     internal ComboBox LanguagePicker { get; }
     internal ComboBox ThemePicker { get; }
     internal ToggleSwitch RemoteImages { get; }
+    internal ComboBox TypefacePicker { get; }
     internal Slider TextSize { get; }
     internal CheckBox DefaultAppPrompt { get; }
     private readonly TextBlock _remoteImagesHelp = new() { TextWrapping = TextWrapping.Wrap, MaxWidth = 400, FontSize = 12 };
@@ -34,13 +35,17 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
             SelectedIndex = settings.Theme == "Light" ? 1 : settings.Theme == "Dark" ? 2 : 0
         };
         RemoteImages = new ToggleSwitch { IsOn = settings.RemoteImages };
-        TextSize = new Slider { Minimum = 12, Maximum = 28, StepFrequency = 1, Value = settings.FontSize };
+        TypefacePicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, SelectedIndex = Array.IndexOf(Typesetting.Typefaces, Typesetting.NormalizeTypeface(settings.Typeface)) };
+        TextSize = new Slider { Minimum = Typesetting.Sizes[0], Maximum = Typesetting.Sizes[^1], StepFrequency = 1, Value = Typesetting.Snap(settings.FontSize) };
+        // The slider moves along the size steps, not every pixel.
+        TextSize.ValueChanged += (_, args) => { double step = Typesetting.Snap(args.NewValue); if (step != args.NewValue) TextSize.Value = step; };
         DefaultAppPrompt = new CheckBox { Content = _defaultAppText, IsChecked = settings.PromptForDefaultApp };
         var panel = new StackPanel { Spacing = 20, MinWidth = 320 };
         panel.Children.Add(LanguagePicker);
         panel.Children.Add(RemoteImages);
         panel.Children.Add(_remoteImagesHelp);
         panel.Children.Add(ThemePicker);
+        panel.Children.Add(TypefacePicker);
         panel.Children.Add(TextSize);
         panel.Children.Add(DefaultAppPrompt);
         Content = panel;
@@ -81,6 +86,10 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
             RemoteImages.OnContent = Text("On");
             RemoteImages.OffContent = Text("Off");
             _remoteImagesHelp.Text = Text("RemoteImagesHelp");
+            int typeface = TypefacePicker.SelectedIndex;
+            TypefacePicker.Header = Text("Typeface");
+            TypefacePicker.ItemsSource = Typesetting.Typefaces.Select(item => Text(Typesetting.LabelKey(item))).ToArray();
+            TypefacePicker.SelectedIndex = typeface;
             TextSize.Header = Text("FontSize");
             _defaultAppText.Text = Text("DefaultAppPrompt");
         }
@@ -92,7 +101,8 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
         settings.Language = SelectedLanguage;
         settings.Theme = ThemePicker.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "Default" };
         settings.RemoteImages = RemoteImages.IsOn;
-        settings.FontSize = TextSize.Value;
+        settings.FontSize = Typesetting.Snap(TextSize.Value);
+        settings.Typeface = Typesetting.Typefaces[Math.Max(0, TypefacePicker.SelectedIndex)];
         settings.PromptForDefaultApp = DefaultAppPrompt.IsChecked == true;
     }
 }

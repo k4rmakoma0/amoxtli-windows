@@ -30,12 +30,13 @@ public sealed partial class MainWindow
                 previousFirstBlockAlive = previous?[1].IsAlive,
                 previousLastBlockAlive = previous?[2].IsAlive,
                 previousNativeContentReleased = previous is null ? (bool?)null : !HasDocumentContent(previous[1]) && !HasDocumentContent(previous[2]),
-                sourceViewCharacters = SourceText?.Text.Length ?? 0,
+                sourceViewCharacters = _sourceEditor.Text.Length,
                 notice = Notice.IsOpen ? Notice.Message : null
             });
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
             File.WriteAllText(reportPath, JsonSerializer.Serialize(new { samples, error }, new JsonSerializerOptions { WriteIndented = true }));
         }
+        _useReader = true;
         try
         {
             _settings.RemoteImages = false;
@@ -84,9 +85,9 @@ public sealed partial class MainWindow
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task<WeakReference[]> ShowLargeMemoryDocumentAsync(string path)
     {
-        string source = await ReadMarkdownAsync(path);
+        var (source, format) = await DocumentFile.ReadAsync(path);
         var parsed = await Task.Run(() => MarkdownService.Parse(source));
-        Navigate(new ReadingDocument(source, path, "Memoria: grande"), parsed);
+        Navigate(new ReadingDocument(source, path, "Memoria: grande", DocumentKind.File, format), parsed);
         DocumentPanel.UpdateLayout();
         return [new(_renderer), new(DocumentPanel.Children.First()), new(DocumentPanel.Children.Last())];
     }

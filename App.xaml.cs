@@ -9,7 +9,14 @@ namespace Amoxtli;
 public partial class App : Application
 {
     private MainWindow? _window;
-    public App() => InitializeComponent();
+    public App()
+    {
+        InitializeComponent();
+#if DEBUG
+        // Debug builds leave the last unhandled exception beside the executable, for crashes in tests.
+        UnhandledException += (_, args) => File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "last-crash.txt"), args.Exception.ToString());
+#endif
+    }
 
     protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {

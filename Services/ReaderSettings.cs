@@ -6,7 +6,8 @@ public sealed class ReaderSettings
 {
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Amoxtli", "settings.json");
     public bool RemoteImages { get; set; } = true;
-    public double FontSize { get; set; } = 16;
+    public double FontSize { get; set; } = Typesetting.DefaultSize;
+    public string Typeface { get; set; } = Typesetting.System;
     public string Theme { get; set; } = "Default";
     public string Language { get; set; } = "auto";
     public bool NavigationOpen { get; set; } = true;
@@ -17,7 +18,8 @@ public sealed class ReaderSettings
         try
         {
             var settings = JsonSerializer.Deserialize<ReaderSettings>(File.ReadAllText(SettingsPath)) ?? new();
-            settings.FontSize = double.IsFinite(settings.FontSize) ? Math.Clamp(settings.FontSize, 12, 28) : 16;
+            settings.FontSize = Typesetting.Snap(settings.FontSize);
+            settings.Typeface = Typesetting.NormalizeTypeface(settings.Typeface);
             return settings;
         }
         catch { return new(); }

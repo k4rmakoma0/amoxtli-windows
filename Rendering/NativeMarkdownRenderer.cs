@@ -43,10 +43,12 @@ public sealed class NativeMarkdownRenderer : IDisposable
     private readonly Dictionary<string, FrameworkElement> _anchors = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(RichTextBlock Text, List<(Hyperlink Link, string Url)> Links)> _links = [];
     private readonly double _font;
+    private readonly FontFamily _family;
     private readonly Brush _foreground;
     private readonly Brush _secondary;
     private readonly Brush _stroke;
     private readonly Brush _subtle;
+    private readonly Brush _codeSurface, _tableHeader, _tableLine;
     private bool _disposed;
     private VirtualMarkdownDocument? _virtualDocument;
     public IReadOnlyDictionary<string, FrameworkElement> Anchors => _virtualDocument?.Anchors ?? _anchors;
@@ -55,12 +57,18 @@ public sealed class NativeMarkdownRenderer : IDisposable
     {
         _imageSlots = imageSlots ?? new(4);
         _host = host; _settings = settings; _path = path; _openLink = openLink; _report = report; _font = settings.FontSize;
+        _family = new FontFamily(Typesetting.FontFamily(settings.Typeface));
         bool dark = host.ActualTheme == ElementTheme.Dark;
         bool highContrast = new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast;
         _foreground = highContrast ? Resource("TextFillColorPrimaryBrush") : new SolidColorBrush(dark ? Colors.WhiteSmoke : Windows.UI.Color.FromArgb(255, 32, 32, 32));
         _secondary = Resource("TextFillColorSecondaryBrush");
         _stroke = Resource("CardStrokeColorDefaultBrush");
         _subtle = Resource("SubtleFillColorSecondaryBrush");
+        // Code backgrounds and table lines read in dark mode and with high contrast (port document, section 11).
+        var theme = dark ? ElementTheme.Dark : ElementTheme.Light;
+        _codeSurface = new SolidColorBrush(Amoxtli.Controls.EditorPalette.CodeSurface(theme));
+        _tableHeader = new SolidColorBrush(Amoxtli.Controls.EditorPalette.TableHeaderSurface(theme));
+        _tableLine = new SolidColorBrush(Amoxtli.Controls.EditorPalette.TableLineSurface(theme));
     }
 
     private static Brush Resource(string name) => (Brush)Application.Current.Resources[name];
@@ -116,7 +124,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     var task = (item.FirstOrDefault() as ParagraphBlock)?.Inline?.FirstChild as TaskList;
                     if (task is null)
-                        row.Children.Add(new TextBlock { Text = list.IsOrdered ? $"{number++}." : "•", FontSize = _font, MinWidth = 22, Margin = new Thickness(4, 5, 0, 0), Foreground = _secondary, TextAlignment = TextAlignment.Right });
+                        row.Children.Add(new TextBlock { Text = list.IsOrdered ? $"{number++}." : "•", FontFamily = _family, FontSize = _font, MinWidth = 22, Margin = new Thickness(4, 5, 0, 0), Foreground = _secondary, TextAlignment = TextAlignment.Right });
                     else
                     {
                         var check = new CheckBox { IsChecked = task.Checked, IsHitTestVisible = false, IsTabStop = false, MinWidth = 22, MinHeight = 24, Margin = new Thickness(0, 0, 0, 0) };
@@ -154,7 +162,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
                 {
                     var body = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
                     _anchors[$"fn:{FootnoteLabel(footnote)}"] = body;
-                    var label = new TextBlock { Text = $"{footnote.Order}. ", FontWeight = FontWeights.SemiBold, FontSize = _font * .85 };
+                    var label = new TextBlock { Text = $"{footnote.Order}. ", FontWeight = FontWeights.SemiBold, FontFamily = _family, FontSize = _font * .85 };
                     body.Children.Add(label);
                     foreach (var child in footnote) AddBlock(body, child, depth + 1);
                     target.Children.Add(body);
@@ -189,7 +197,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
 
     private RichTextBlock Rich(ContainerInline? inline, double? size = null)
     {
-        var text = new RichTextBlock { FontSize = size ?? _font, Foreground = _foreground, IsTextSelectionEnabled = true, TextReadingOrder = TextReadingOrder.DetectFromContent, TextAlignment = TextAlignment.DetectFromContent, TextWrapping = TextWrapping.Wrap, LineHeight = (size ?? _font) * 1.55, Margin = new Thickness(0, 3, 0, 10) };
+        var text = new RichTextBlock { FontFamily = _family, FontSize = size ?? _font, Foreground = _foreground, IsTextSelectionEnabled = true, TextReadingOrder = TextReadingOrder.DetectFromContent, TextAlignment = TextAlignment.DetectFromContent, TextWrapping = TextWrapping.Wrap, LineHeight = (size ?? _font) * 1.55, Margin = new Thickness(0, 3, 0, 10) };
         var paragraph = new Paragraph();
         var links = new List<(Hyperlink Link, string Url)>();
         AppendInlines(paragraph.Inlines, inline, links, text);
@@ -339,7 +347,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
         var scroll = new ScrollViewer { Content = text, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled };
         Grid.SetRow(scroll, 1); panel.Children.Add(scroll);
         _searchable.Add((text, code));
-        return new Border { Child = panel, Background = _subtle, BorderBrush = _stroke, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(16, 10, 16, 8), Margin = new Thickness(0, 6, 0, 16) };
+        return new Border { Child = panel, Background = _codeSurface, CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 10, 16, 8), Margin = new Thickness(0, 6, 0, 16) };
     }
 
     private FrameworkElement RenderTable(Table table, int depth)
@@ -372,7 +380,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
                     }
                     text.Margin = new Thickness(0);
                 }
-                var border = new Border { Child = body, Padding = new Thickness(12), BorderBrush = _stroke, BorderThickness = new Thickness(0, 0, 1, 1), Background = row.IsHeader ? _subtle : null };
+                var border = new Border { Child = body, Padding = new Thickness(12), BorderBrush = _tableLine, BorderThickness = new Thickness(0, 0, 1, 1), Background = row.IsHeader ? _tableHeader : null };
                 Grid.SetColumn(border, column); Grid.SetRow(border, rowIndex);
                 Grid.SetColumnSpan(border, Math.Clamp(cell.ColumnSpan, 1, columns - column));
                 Grid.SetRowSpan(border, Math.Max(1, cell.RowSpan));
@@ -380,7 +388,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
             }
             rowIndex++;
         }
-        return new Border { Child = new ScrollViewer { Content = grid, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, BorderBrush = _stroke, BorderThickness = new Thickness(1, 1, 0, 0), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 8, 0, 18) };
+        return new Border { Child = new ScrollViewer { Content = grid, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, BorderBrush = _tableLine, BorderThickness = new Thickness(1, 1, 0, 0), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 8, 0, 18) };
     }
 
     private FrameworkElement Image(LinkInline imageLink)
