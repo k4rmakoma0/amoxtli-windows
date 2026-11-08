@@ -31,6 +31,22 @@ internal readonly record struct EditorPalette(Color Text, Color Syntax, Color Ac
         return Color.FromArgb(255, (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
     }
 
+    /// <summary>
+    /// A surface for XAML elements, which do have alpha: black over light, white over dark, and the high contrast
+    /// value in the high contrast themes (port document, section 11).
+    /// </summary>
+    public static Color Surface(ElementTheme theme, double light, double dark, double contrast)
+    {
+        bool isDark = theme == ElementTheme.Dark;
+        double alpha = new AccessibilitySettings().HighContrast ? contrast : isDark ? dark : light;
+        byte ink = isDark ? (byte)255 : (byte)0;
+        return Color.FromArgb((byte)Math.Round(alpha * 255), ink, ink, ink);
+    }
+
+    public static Color CodeSurface(ElementTheme theme) => Surface(theme, 0.075, 0.13, 0.16);
+    public static Color TableHeaderSurface(ElementTheme theme) => Surface(theme, 0.05, 0.08, 0.12);
+    public static Color TableLineSurface(ElementTheme theme) => Surface(theme, 0.2, 0.26, 0.5);
+
     public static EditorPalette For(ElementTheme theme)
     {
         bool dark = theme == ElementTheme.Dark;

@@ -15,7 +15,7 @@
   <mp:PhoneIdentity PhoneProductId="e7bccad6-d31d-40f2-a3ad-4386578c20b9" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>Amoxtli: Markdown Viewer</DisplayName>
+    <DisplayName>Amoxtli: Markdown Editor</DisplayName>
     <PublisherDisplayName>k4rmakoma</PublisherDisplayName>
     <Logo>Assets\Amoxtli.StoreLogo.png</Logo>
   </Properties>

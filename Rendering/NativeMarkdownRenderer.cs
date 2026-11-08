@@ -48,6 +48,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
     private readonly Brush _secondary;
     private readonly Brush _stroke;
     private readonly Brush _subtle;
+    private readonly Brush _codeSurface, _tableHeader, _tableLine;
     private bool _disposed;
     private VirtualMarkdownDocument? _virtualDocument;
     public IReadOnlyDictionary<string, FrameworkElement> Anchors => _virtualDocument?.Anchors ?? _anchors;
@@ -63,6 +64,11 @@ public sealed class NativeMarkdownRenderer : IDisposable
         _secondary = Resource("TextFillColorSecondaryBrush");
         _stroke = Resource("CardStrokeColorDefaultBrush");
         _subtle = Resource("SubtleFillColorSecondaryBrush");
+        // Code backgrounds and table lines read in dark mode and with high contrast (port document, section 11).
+        var theme = dark ? ElementTheme.Dark : ElementTheme.Light;
+        _codeSurface = new SolidColorBrush(Amoxtli.Controls.EditorPalette.CodeSurface(theme));
+        _tableHeader = new SolidColorBrush(Amoxtli.Controls.EditorPalette.TableHeaderSurface(theme));
+        _tableLine = new SolidColorBrush(Amoxtli.Controls.EditorPalette.TableLineSurface(theme));
     }
 
     private static Brush Resource(string name) => (Brush)Application.Current.Resources[name];
@@ -341,7 +347,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
         var scroll = new ScrollViewer { Content = text, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled };
         Grid.SetRow(scroll, 1); panel.Children.Add(scroll);
         _searchable.Add((text, code));
-        return new Border { Child = panel, Background = _subtle, BorderBrush = _stroke, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(16, 10, 16, 8), Margin = new Thickness(0, 6, 0, 16) };
+        return new Border { Child = panel, Background = _codeSurface, CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 10, 16, 8), Margin = new Thickness(0, 6, 0, 16) };
     }
 
     private FrameworkElement RenderTable(Table table, int depth)
@@ -374,7 +380,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
                     }
                     text.Margin = new Thickness(0);
                 }
-                var border = new Border { Child = body, Padding = new Thickness(12), BorderBrush = _stroke, BorderThickness = new Thickness(0, 0, 1, 1), Background = row.IsHeader ? _subtle : null };
+                var border = new Border { Child = body, Padding = new Thickness(12), BorderBrush = _tableLine, BorderThickness = new Thickness(0, 0, 1, 1), Background = row.IsHeader ? _tableHeader : null };
                 Grid.SetColumn(border, column); Grid.SetRow(border, rowIndex);
                 Grid.SetColumnSpan(border, Math.Clamp(cell.ColumnSpan, 1, columns - column));
                 Grid.SetRowSpan(border, Math.Max(1, cell.RowSpan));
@@ -382,7 +388,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
             }
             rowIndex++;
         }
-        return new Border { Child = new ScrollViewer { Content = grid, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, BorderBrush = _stroke, BorderThickness = new Thickness(1, 1, 0, 0), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 8, 0, 18) };
+        return new Border { Child = new ScrollViewer { Content = grid, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, BorderBrush = _tableLine, BorderThickness = new Thickness(1, 1, 0, 0), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 8, 0, 18) };
     }
 
     private FrameworkElement Image(LinkInline imageLink)

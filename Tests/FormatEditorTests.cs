@@ -186,8 +186,6 @@ public sealed partial class MainWindow
         Check("Fuente actualiza Formato", _formatEditor.Markdown.StartsWith("Inicio\n\n# Título dividido") && _formatEditor.Fields[0].ReadText() == "Inicio", Show(_formatEditor.Markdown[..Math.Min(40, _formatEditor.Markdown.Length)]));
         SetMode(EditorMode.Format);
 
-        Navigate(new ReadingDocument(new string('a', FormatEditingLimit + 1), null, "Grande"), MarkdownService.Parse("a"));
-        Check("Documentos sobre el límite usan el lector", !FormatEditing && ReaderScroll.Visibility == Visibility.Visible && FormatHost.Visibility == Visibility.Collapsed);
         Navigate(new ReadingDocument("# Fin del Formato", null, "Fin"), MarkdownService.Parse("# Fin del Formato"));
     }
 }

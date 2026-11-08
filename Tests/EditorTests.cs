@@ -303,8 +303,11 @@ public sealed partial class MainWindow
 
             _sourceEditor.Apply(new TextEdit(0, 0, "x", 1, 0));
             await File.WriteAllTextAsync(path, "otro");
+            int asked = 0;
+            ConflictResolver = (_, _) => { asked++; return Task.FromResult(ConflictChoice.KeepMine); };
             await ReloadCurrentAsync(true);
-            Check("Cambio externo no reemplaza ediciones sin guardar", _document is { IsDirty: true } && _sourceEditor.Text.StartsWith("x# A") && Notice.Message == Localization.Get("ChangedOnDisk"));
+            ConflictResolver = null;
+            Check("Cambio externo no reemplaza ediciones sin guardar", asked == 1 && _document is { IsDirty: true } && _sourceEditor.Text.StartsWith("x# A"));
             UpdateDocument(_document! with { Source = _document!.Saved });
             LoadEditor();
             await ReloadCurrentAsync(true);

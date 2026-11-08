@@ -23,7 +23,9 @@ namespace Amoxtli.Controls;
 /// </summary>
 internal sealed class SourceEditor : Grid
 {
-    private const int StyleBatch = 600;
+    // Styling runs in short slices so a large document keeps the window responsive while it is colored.
+    private const int StyleBatch = 80;
+    private static readonly TimeSpan StyleSlice = TimeSpan.FromMilliseconds(25);
     /// <summary>Per-run font names must be static fonts: variable Cascadia Mono does not resolve in rich text.</summary>
     internal const string MonospaceFont = "Consolas";
     private readonly SourceHighlighter _highlighter = new();
@@ -279,9 +281,10 @@ internal sealed class SourceEditor : Grid
 
     private void StyleNextBatch()
     {
-        int count = Math.Min(StyleBatch, _highlighter.LineCount - _styledLines);
-        if (count > 0)
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (_styledLines < _highlighter.LineCount && clock.Elapsed < StyleSlice)
         {
+            int count = Math.Min(StyleBatch, _highlighter.LineCount - _styledLines);
             StyleLines(_styledLines, _styledLines + count - 1);
             _styledLines += count;
         }

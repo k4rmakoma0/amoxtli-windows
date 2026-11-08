@@ -39,6 +39,9 @@ public static class DocumentFile
         return (NormalizeLineEndings(text), new FileFormat(encoding, skip > 0, text.Contains("\r\n")));
     }
 
+    /// <summary>The file's last write time, read fresh from the file system, or default when it is gone.</summary>
+    public static DateTime Stamp(string path) => File.Exists(path) ? File.GetLastWriteTimeUtc(path) : default;
+
     public static string NormalizeLineEndings(string text) => text.Contains('\r') ? text.Replace("\r\n", "\n").Replace('\r', '\n') : text;
 
     public static byte[] Encode(string text, FileFormat format)

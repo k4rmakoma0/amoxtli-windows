@@ -2,14 +2,16 @@
 
 Effective date: November 2, 2026.
 
-Amoxtli is a read-only Markdown viewer. It has no accounts, advertising,
+Amoxtli is a Markdown editor and reader. It has no accounts, advertising,
 analytics or application-level tracking, and does not send your documents or
 folder contents to the developer.
 
 ## Local data
 
-Files and folders are read on your computer and are not modified by the viewer.
-Reading preferences, such as language, theme, text size and remote-image
+Files and folders are read on your computer. A file is written only when you
+save it, or when it changes inside a folder you opened, which saves automatically;
+Amoxtli never writes a file it could not read correctly. Preferences, such as
+language, theme, typeface, text size and remote-image
 settings, are stored locally in the application's local data directory in
 `Amoxtli/settings.json`. Uninstalling the GitHub version preserves preferences.
 
@@ -18,7 +20,7 @@ settings, are stored locally in the application's local data directory in
 When a document contains a remote image and remote images are enabled, the app
 requests that image from its server. That server may receive your IP address
 and request information. Image locations are chosen by the document's author,
-not by the developer. Remote images can be disabled in Reading Preferences.
+not by the developer. Remote images can be disabled in Preferences.
 
 Following a web link opens it in the browser or application selected by Windows.
 Those applications and websites have their own privacy practices. Amoxtli does

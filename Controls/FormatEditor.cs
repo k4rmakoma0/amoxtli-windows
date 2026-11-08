@@ -204,7 +204,7 @@ internal sealed class FormatEditor : Grid
         return new Border
         {
             Child = grid,
-            Background = new SolidColorBrush(_palette.CodeBackground),
+            Background = new SolidColorBrush(EditorPalette.CodeSurface(ActualTheme)),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(16, 6, 8, 12),
             Margin = new Thickness(0, 4, 0, 8)
@@ -309,7 +309,8 @@ internal sealed class FormatEditor : Grid
         var grid = new Grid { Margin = new Thickness(0, 6, 0, 12), HorizontalAlignment = HorizontalAlignment.Left };
         for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = 72 });
         for (int r = 0; r < rows; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var stroke = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"];
+        var stroke = new SolidColorBrush(EditorPalette.TableLineSurface(ActualTheme));
+        var headerSurface = new SolidColorBrush(EditorPalette.TableHeaderSurface(ActualTheme));
         foreach (int i in cells)
         {
             var p = _paragraphs[i];
@@ -330,21 +331,13 @@ internal sealed class FormatEditor : Grid
                 BorderBrush = stroke,
                 // The whole grid is drawn, outer edges included.
                 BorderThickness = new Thickness(p.Column == 0 ? 1 : 0, p.Row == 0 ? 1 : 0, 1, 1),
-                Background = header ? new SolidColorBrush(EditorPaletteHeader()) : null
+                Background = header ? headerSurface : null
             };
             Grid.SetRow(cell, p.Row); Grid.SetColumn(cell, p.Column);
             grid.Children.Add(cell);
         }
         block.Field = _order.FirstOrDefault(entry => entry.Block == block).Field;
         return grid;
-    }
-
-    private Windows.UI.Color EditorPaletteHeader()
-    {
-        // Table header: black at 0.05 on light, white at 0.08 on dark (port document, section 11).
-        bool dark = ActualTheme == ElementTheme.Dark;
-        byte value = dark ? (byte)Math.Round(43 + (255 - 43) * 0.08) : (byte)Math.Round(250 * (1 - 0.05));
-        return Windows.UI.Color.FromArgb(255, value, value, value);
     }
 
     /// <summary>Raw Markdown and images keep the reader's presentation; they are not edited here.</summary>

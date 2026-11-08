@@ -81,7 +81,7 @@ Root: HKCU; Subkey: "Software\Amoxtli\GitHub\Capabilities\FileAssociations"; Val
 #emit RegisterExtension
 Root: HKCU; Subkey: "Software\Amoxtli\GitHub"; Flags: uninsdeletekey; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\Amoxtli\GitHub\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "Amoxtli (GitHub)"; Tasks: fileassoc
-Root: HKCU; Subkey: "Software\Amoxtli\GitHub\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Markdown Viewer"; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Amoxtli\GitHub\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Markdown Editor"; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\Amoxtli\GitHub\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\Amoxtli.exe"",0"; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "Amoxtli (GitHub)"; ValueData: "Software\Amoxtli\GitHub\Capabilities"; Flags: uninsdeletevalue; Tasks: fileassoc
 

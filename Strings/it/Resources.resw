@@ -2,6 +2,6 @@
 <root>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
-  <data name="AppDescription" xml:space="preserve"><value>Lettore nativo di file Markdown</value></data>
+  <data name="AppDescription" xml:space="preserve"><value>Editor e lettore nativo di file Markdown</value></data>
   <data name="MarkdownDocument" xml:space="preserve"><value>Documento Markdown</value></data>
 </root>

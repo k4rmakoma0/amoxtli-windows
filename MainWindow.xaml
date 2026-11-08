@@ -125,7 +125,7 @@
             </SplitView.Pane>
             <Grid x:Name="ReaderSurface" Margin="8,2,12,6" Background="{ThemeResource LayerFillColorAltBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12" Translation="0,0,16">
                 <Grid.Shadow><ThemeShadow x:Name="ReaderShadow"/></Grid.Shadow>
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Grid x:Name="FindBar" Visibility="Collapsed" Padding="20,12" ColumnSpacing="8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <TextBox x:Name="SearchBox" services:LocalizedText.Text="Find" TextChanged="Search_TextChanged" KeyDown="Search_KeyDown" services:LocalizedText.Name="Find"/>
@@ -138,11 +138,21 @@
                     <Grid.ColumnDefinitions><ColumnDefinition x:Name="SourceColumn" Width="0"/><ColumnDefinition x:Name="DividerColumn" Width="0"/><ColumnDefinition x:Name="ReaderColumn" Width="*"/></Grid.ColumnDefinitions>
                     <Border x:Name="SourceHost" Visibility="Collapsed" FlowDirection="LeftToRight"/>
                     <Border x:Name="FormatHost" Grid.Column="2" Visibility="Collapsed"/>
+                    <StackPanel x:Name="TooLargePanel" Grid.Column="2" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="480" Spacing="12" Padding="24">
+                        <TextBlock x:Name="TooLargeTitle" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="TooLargeText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="TooLargeSource" Style="{StaticResource AccentButtonStyle}" Click="TooLargeSource_Click"/>
+                            <Button x:Name="TooLargeRead" Click="TooLargeRead_Click"/>
+                        </StackPanel>
+                    </StackPanel>
                     <Border x:Name="SplitDivider" Grid.Column="1" Width="1" Visibility="Collapsed" Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
                     <ScrollViewer x:Name="ReaderScroll" Grid.Column="2" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" ViewChanged="Reader_ViewChanged">
                         <StackPanel x:Name="DocumentPanel" MaxWidth="920" Padding="40,32,40,64" HorizontalAlignment="Stretch" Spacing="4"/>
                     </ScrollViewer>
                 </Grid>
+                <!-- Statistics get their own strip, so the text never runs under them. -->
+                <TextBlock x:Name="StatsText" Grid.Row="2" HorizontalAlignment="Right" Margin="20,2,20,8" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
             </Grid>
         </SplitView>
         <Grid Grid.Row="5" Padding="16,8" ColumnSpacing="16">

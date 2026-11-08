@@ -35,6 +35,8 @@ public sealed partial class MainWindow : Window
         public string Name { get; init; }
         public DocumentKind Kind { get; init; }
         public FileFormat? Format { get; init; }
+        /// <summary>The file's last write time when it was read or saved, to notice changes made elsewhere.</summary>
+        public DateTime Stamp { get; init; }
         public bool IsDirty => !ReferenceEquals(Source, Saved) && Source != Saved;
     }
     private sealed class HistoryEntry(ReadingDocument document)
@@ -142,13 +144,13 @@ public sealed partial class MainWindow : Window
             var parsed = await Task.Run(() => MarkdownService.Parse(source));
             if (revision != _openRevision || _closed) return;
             if (!await ConfirmLeaveAsync() || revision != _openRevision) return;
-            Navigate(new ReadingDocument(source, path, System.IO.Path.GetFileName(path), DocumentKind.File, format), parsed);
-            if (_folderPath is null) await OpenFolderAsync(System.IO.Path.GetDirectoryName(path)!, false);
+            Navigate(new ReadingDocument(source, path, System.IO.Path.GetFileName(path), DocumentKind.File, format) { Stamp = DocumentFile.Stamp(path) }, parsed);
+            if (_folderPath is null) await OpenFolderAsync(System.IO.Path.GetDirectoryName(path)!, false, false);
         }
         catch (Exception ex) { if (revision == _openRevision) await ShowErrorAsync(Localization.Get("OpenFileError"), ex.Message); }
     }
 
-    public async Task OpenFolderAsync(string path, bool selectTab = true)
+    public async Task OpenFolderAsync(string path, bool selectTab = true, bool chosen = true)
     {
         int revision = ++_folderRevision;
         try
@@ -157,6 +159,7 @@ public sealed partial class MainWindow : Window
             var entries = await Task.Run(() => ReadDirectory(path));
             if (revision != _folderRevision || _closed) return;
             _folderPath = path;
+            _folderExplicit = chosen;
             FolderName.Text = System.IO.Path.GetFileName(path.TrimEnd(System.IO.Path.DirectorySeparatorChar));
             if (string.IsNullOrEmpty(FolderName.Text)) FolderName.Text = path;
             ToolTipService.SetToolTip(FolderName, path);
@@ -212,8 +215,11 @@ public sealed partial class MainWindow : Window
         _historyIndex = _history.Count - 1;
         _document = document;
         Notice.IsOpen = false;
+        _largeReader = false;
+        // A document over the Format limit opens in Source.
+        if (!_useReader && _mode == EditorMode.Format && TooLarge(document)) SetMode(EditorMode.Source);
+        else if (_mode != EditorMode.Format) LoadEditor();
         RenderCurrent(false, parsed);
-        if (_mode != EditorMode.Format) LoadEditor();
         WatchCurrentFile();
     }
 
@@ -230,7 +236,7 @@ public sealed partial class MainWindow : Window
             _renderer = null;
             _readerStale = _mode == EditorMode.Source;
             UpdateFormatSurface();
-            if (_readerStale || FormatEditing)
+            if (_readerStale || FormatEditing || ReaderScroll.Visibility != Visibility.Visible)
             {
                 DocumentPanel.Children.Clear();
                 // The Format editor reloads for another document or text changed elsewhere, never for its own edits.
@@ -339,7 +345,10 @@ public sealed partial class MainWindow : Window
             _reloadTimer.Tick -= ReloadTimer_Tick; _reloadTimer.Tick += ReloadTimer_Tick;
             _watcher = new FileSystemWatcher(System.IO.Path.GetDirectoryName(path)!) { Filter = System.IO.Path.GetFileName(path), NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName };
             void Changed(object sender, FileSystemEventArgs args) => DispatcherQueue.TryEnqueue(() => { if (!_closed) { _reloadTimer.Stop(); _reloadTimer.Start(); } });
-            _watcher.Changed += Changed; _watcher.Created += Changed; _watcher.Renamed += (s, e) => Changed(s, e); _watcher.EnableRaisingEvents = true;
+            _watcher.Changed += Changed; _watcher.Created += Changed; _watcher.Renamed += (s, e) => Changed(s, e);
+            // Deleted or moved away: say so, keep the text, and never bring the file back by autosave.
+            _watcher.Deleted += (_, _) => DispatcherQueue.TryEnqueue(() => { if (!_closed) FileMissing(); });
+            _watcher.EnableRaisingEvents = true;
         }
         catch (Exception ex) { Notify(Localization.Format("AutoReloadUnavailable", ex.Message), InfoBarSeverity.Warning); }
     }
@@ -353,15 +362,27 @@ public sealed partial class MainWindow : Window
         int revision = _openRevision;
         try
         {
+            if (!File.Exists(document.Path)) { FileMissing(); return; }
             var (source, format) = await DocumentFile.ReadAsync(document.Path);
+            var stamp = DocumentFile.Stamp(document.Path);
             if (revision != _openRevision || _document?.Path != document.Path || _closed) return;
             document = _document;
-            if (automatic && source == document.Saved) return;
-            // Never replace unsaved edits with the file on disk.
-            if (document.IsDirty) { if (source != document.Saved) Notify(Localization.Get("ChangedOnDisk"), InfoBarSeverity.Warning); return; }
+            if (source == document.Saved)
+            {
+                UpdateDocument(document with { Stamp = stamp });
+                if (automatic || document.IsDirty) return;
+            }
+            // Unsaved edits are never replaced without asking; keeping them means the next save replaces the file.
+            else if (document.IsDirty)
+            {
+                var choice = await ResolveConflictAsync(document, false);
+                if (_document is not { } current || current.Path != document.Path) return;
+                if (choice != ConflictChoice.UseDisk) { UpdateDocument(current with { Stamp = stamp }); return; }
+                document = current;
+            }
             var parsed = await Task.Run(() => MarkdownService.Parse(source));
             if (revision != _openRevision || _document != document || _closed) return;
-            _document = new ReadingDocument(source, document.Path, document.Name, document.Kind, format);
+            _document = new ReadingDocument(source, document.Path, document.Name, document.Kind, format) { Stamp = stamp };
             if (_historyIndex >= 0)
             {
                 double offset = ReaderScroll.VerticalOffset;
@@ -434,7 +455,7 @@ public sealed partial class MainWindow : Window
     private async void Reload_Click(object sender, RoutedEventArgs e)
     {
         await ReloadCurrentAsync(false);
-        if (_folderPath is not null) await OpenFolderAsync(_folderPath, false);
+        if (_folderPath is not null) await OpenFolderAsync(_folderPath, false, _folderExplicit);
     }
 
     private async void Reveal_Click(object sender, RoutedEventArgs e)

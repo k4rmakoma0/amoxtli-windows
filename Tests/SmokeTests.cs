@@ -357,6 +357,8 @@ public sealed partial class MainWindow
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
         try { await RunCodeEditorTestsAsync(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Code editor exception", passed = false, detail = ex.ToString() }); }
+        try { await RunFilesTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Files exception", passed = false, detail = ex.ToString() }); }
         try { await RunSplitTestsAsync(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en Dividido", passed = false, detail = ex.ToString() }); }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);

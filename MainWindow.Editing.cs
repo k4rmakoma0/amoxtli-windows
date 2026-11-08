@@ -25,11 +25,22 @@ public sealed partial class MainWindow
     private SourceEditor _sourceEditor = null!;
     private FormatEditor _formatEditor = null!;
     private SplitScroll _splitScroll = null!;
-    /// <summary>The read-only renderer stands in for the Format editor (documents over the editing limit, reader tests).</summary>
+    /// <summary>The read-only renderer stands in for the Format editor (reader tests).</summary>
     private bool _useReader;
+    /// <summary>The user asked to read a document over the editing limit with the read-only renderer.</summary>
+    private bool _largeReader;
+    private (string? Source, bool Large) _largeCheck;
     private bool _formatFocused;
-    /// <summary>Documents larger than this are formatted by the read-only reader; edit them in Source.</summary>
+    /// <summary>Format and Split take documents up to this many UTF-8 bytes; larger ones are edited in Source (port document, section 13).</summary>
     internal const int FormatEditingLimit = 1_000_000;
+
+    private bool TooLarge(ReadingDocument? document)
+    {
+        if (document is null) return false;
+        if (!ReferenceEquals(_largeCheck.Source, document.Source))
+            _largeCheck = (document.Source, document.Source.Length > FormatEditingLimit / 3 && System.Text.Encoding.UTF8.GetByteCount(document.Source) > FormatEditingLimit);
+        return _largeCheck.Large;
+    }
     private DispatcherQueueTimer _editTimer = null!;
     private DispatcherQueueTimer _toolStateTimer = null!;
     private readonly Dictionary<(VirtualKey Key, VirtualKeyModifiers Modifiers), Action> _shortcuts = [];
@@ -40,7 +51,7 @@ public sealed partial class MainWindow
     private bool _readerStale, _updatingTools, _closeConfirmed;
 
     /// <summary>The Format editor is shown in place of the reader.</summary>
-    private bool FormatEditing => _mode != EditorMode.Source && !_useReader && _document is not null && _document.Source.Length <= FormatEditingLimit;
+    private bool FormatEditing => _mode != EditorMode.Source && !_useReader && _document is not null && !TooLarge(_document);
     /// <summary>Tools act on the last editor with focus: Format in Format mode, either one in Split.</summary>
     private bool FormatActive => FormatEditing && (_mode == EditorMode.Format || _formatFocused);
     private SourceEditor? ActiveEditor => _mode != EditorMode.Format && _document is not null && !FormatActive ? _sourceEditor : null;
@@ -63,6 +74,7 @@ public sealed partial class MainWindow
         _formatEditor.Scroll.ViewChanged += (_, _) => UpdateProgress();
         FormatHost.Child = _formatEditor;
         _splitScroll = new SplitScroll(_sourceEditor, _formatEditor);
+        InitializeFiles();
         _editTimer = DispatcherQueue.CreateTimer();
         _editTimer.Interval = TimeSpan.FromMilliseconds(200);
         _editTimer.IsRepeating = false;
@@ -164,9 +176,29 @@ public sealed partial class MainWindow
     private void UpdateFormatSurface()
     {
         bool reader = _mode != EditorMode.Source;
+        // Over the limit the Format editor is never built: a notice offers Source, or reading with the read-only renderer.
+        bool large = reader && !_useReader && TooLarge(_document);
         FormatHost.Visibility = reader && FormatEditing ? Visibility.Visible : Visibility.Collapsed;
-        ReaderScroll.Visibility = reader && !FormatEditing ? Visibility.Visible : Visibility.Collapsed;
+        ReaderScroll.Visibility = reader && !FormatEditing && (!large || _largeReader) ? Visibility.Visible : Visibility.Collapsed;
+        TooLargePanel.Visibility = large && !_largeReader ? Visibility.Visible : Visibility.Collapsed;
+        if (large && _document is { } document)
+        {
+            static string Size(double bytes) => Localization.Format("SizeMegabytes", bytes / 1_000_000);
+            TooLargeTitle.Text = Localization.Get("TooLargeTitle");
+            TooLargeText.Text = Localization.Format("TooLargeText", Size(System.Text.Encoding.UTF8.GetByteCount(document.Source)), Size(FormatEditingLimit));
+            TooLargeSource.Content = Localization.Get("ShowSource");
+            TooLargeRead.Content = Localization.Get("ReadFormatted");
+        }
         if (!FormatEditing) _formatEditor.Clear();
+    }
+
+    private void TooLargeSource_Click(object sender, RoutedEventArgs e) => SetMode(EditorMode.Source);
+
+    private void TooLargeRead_Click(object sender, RoutedEventArgs e)
+    {
+        _largeReader = true;
+        UpdateFormatSurface();
+        RenderCurrent(true);
     }
 
     private void UpdateModeControls()
@@ -196,6 +228,7 @@ public sealed partial class MainWindow
         _readerStale = true;
         _splitScroll.Invalidate();
         _splitScroll.Edited(SplitScroll.Side.Source);
+        ScheduleAutosave();
         _editTimer.Stop();
         _editTimer.Start();
     }
@@ -209,6 +242,7 @@ public sealed partial class MainWindow
         // Source takes only the difference, keeping its caret, scroll and highlighting.
         if (_mode == EditorMode.Split) _sourceEditor.Replace(_formatEditor.Markdown);
         _splitScroll.Edited(SplitScroll.Side.Format);
+        ScheduleAutosave();
         _editTimer.Stop();
         _editTimer.Start();
     }
@@ -238,15 +272,33 @@ public sealed partial class MainWindow
         if (_historyIndex >= 0 && _historyIndex < _history.Count) _history[_historyIndex].Document = document;
     }
 
-    /// <summary>Outline, statistics and the formatted view follow the text shortly after the last edit.</summary>
+    private bool _parsing, _parsePending;
+
+    /// <summary>
+    /// Outline, statistics and the formatted view follow the text shortly after the last edit. One parse runs at a
+    /// time, since a large document takes seconds and much memory: what arrives meanwhile waits, and only the
+    /// latest text is parsed next.
+    /// </summary>
     private async Task RefreshAfterEditAsync()
     {
-        if (_document is not { } document) return;
-        int revision = ++_analysisRevision;
-        var parsed = await Task.Run(() => MarkdownService.Parse(document.Source));
-        if (revision != _analysisRevision || _closed || _document is null) return;
-        if (_mode == EditorMode.Source) ShowAnalysis(parsed);
-        else RenderCurrent(true, parsed);
+        if (_parsing) { _parsePending = true; return; }
+        _parsing = true;
+        try
+        {
+            do
+            {
+                _parsePending = false;
+                if (_document is not { } document) return;
+                int revision = ++_analysisRevision;
+                var parsed = await Task.Run(() => MarkdownService.Parse(document.Source));
+                if (revision != _analysisRevision || _closed || _document is null) return;
+                if (_parsePending) continue;
+                if (_mode == EditorMode.Source) ShowAnalysis(parsed);
+                else RenderCurrent(true, parsed);
+            }
+            while (_parsePending && !_closed);
+        }
+        finally { _parsing = false; }
     }
 
     private void ShowAnalysis(Markdig.Syntax.MarkdownDocument parsed)
@@ -254,8 +306,10 @@ public sealed partial class MainWindow
         OutlineList.ItemsSource = MarkdownService.GetHeadings(parsed);
         OutlineEmpty.Visibility = OutlineList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_document is null) return;
-        int words = Regex.Count(_document.Source, @"\S+");
-        StatusText.Text = Localization.Format("DocumentStatus", words, Math.Max(1, (int)Math.Ceiling(words / 220d)));
+        // Words of headings, paragraphs, lists, quotes and tables, read at 200 words a minute.
+        int words = MarkdownService.CountWords(parsed);
+        StatsText.Text = words < 200 ? Localization.Format("DocumentStatusShort", words) : Localization.Format("DocumentStatus", words, (int)Math.Round(words / 200d));
+        StatusText.Text = "";
     }
 
     private void UpdateDocumentInfo()
@@ -621,7 +675,7 @@ public sealed partial class MainWindow
     private async void Save_Click(object sender, RoutedEventArgs e) => await SaveAsync(false);
     private async void SaveAs_Click(object sender, RoutedEventArgs e) => await SaveAsync(true);
 
-    internal async Task<bool> SaveAsync(bool saveAs, string? targetPath = null)
+    internal async Task<bool> SaveAsync(bool saveAs, string? targetPath = null, bool autosave = false)
     {
         if (_document is not { } document) return false;
         string? path = targetPath ?? (document.Kind == DocumentKind.File && !saveAs ? document.Path : null);
@@ -637,6 +691,8 @@ public sealed partial class MainWindow
             catch (Exception ex) { await ShowErrorAsync(Localization.Get("PickerError"), ex.Message); return false; }
             if (path is null) return false;
         }
+        if (!await CheckDiskBeforeSaveAsync(document, path, autosave)) return false;
+        if (_document is { } latest && latest.Path == document.Path && latest.Kind == document.Kind) document = latest;
         var format = document.Format ?? FileFormat.Default;
         string text = document.Source;
         try { await Task.Run(() => DocumentFile.Write(path, text, format)); }
@@ -648,7 +704,7 @@ public sealed partial class MainWindow
         if (_document is not { } current || _closed || current.Path != document.Path || current.Kind != document.Kind) return true;
         bool moved = !string.Equals(current.Path, path, StringComparison.OrdinalIgnoreCase) || current.Kind != DocumentKind.File;
         // Typing during the write leaves the newer text unsaved.
-        UpdateDocument(current with { Saved = text, Path = path, Name = System.IO.Path.GetFileName(path), Kind = DocumentKind.File, Format = format });
+        UpdateDocument(current with { Saved = text, Path = path, Name = System.IO.Path.GetFileName(path), Kind = DocumentKind.File, Format = format, Stamp = DocumentFile.Stamp(path) });
         UpdateDocumentInfo();
         if (moved) WatchCurrentFile();
         return true;
@@ -658,6 +714,8 @@ public sealed partial class MainWindow
     private async Task<bool> ConfirmLeaveAsync()
     {
         if (_document is not { IsDirty: true } document) return true;
+        // In a folder the user opened, leaving a file saves it; only a failed save asks.
+        if (Autosaves(document) && await AutosaveAsync()) return true;
         if (_dialogOpen) return false;
         var dialog = new ContentDialog
         {
