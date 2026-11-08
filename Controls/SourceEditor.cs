@@ -175,6 +175,47 @@ internal sealed class SourceEditor : Grid
         Box.Focus(FocusState.Programmatic);
     }
 
+    private ScrollViewer? _scroll;
+
+    /// <summary>The text box's own scroll viewer, available once its template is applied.</summary>
+    public ScrollViewer? Scroll => _scroll ??= Descendant<ScrollViewer>(Box);
+
+    private double _rectUnits = 1;
+
+    /// <summary>The top of the line holding <paramref name="offset"/>, in the scrolled content (the rectangle already is).</summary>
+    public double TopOf(int offset)
+    {
+        offset = Math.Clamp(offset, 0, _text.Length);
+        Box.Document.GetRange(offset, offset).GetRect(PointOptions.ClientCoordinates, out var rect, out _);
+        return rect.Y / _rectUnits;
+    }
+
+    /// <summary>
+    /// Rich text reports rectangles in effective pixels in a shown window but in physical pixels in some others
+    /// (a hidden one): compare the end of the text with the scroll extent to tell which. Measuring the end also
+    /// finishes the background layout, so the extent covers all the text.
+    /// </summary>
+    public void CalibrateUnits()
+    {
+        _rectUnits = 1;
+        double end = TopOf(_text.Length);
+        Scroll?.UpdateLayout();
+        double extent = Scroll?.ExtentHeight ?? 0, scale = Box.XamlRoot?.RasterizationScale ?? 1;
+        if (scale > 1 && extent > 0 && end > extent * (1 + scale) / 2) _rectUnits = scale;
+    }
+
+    private static T? Descendant<T>(DependencyObject root) where T : DependencyObject
+    {
+        var queue = new Queue<DependencyObject>([root]);
+        while (queue.Count > 0)
+        {
+            var node = queue.Dequeue();
+            if (node is T match && node != root) return match;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++) queue.Enqueue(VisualTreeHelper.GetChild(node, i));
+        }
+        return null;
+    }
+
     public void Cut() => Box.Document.Selection.Cut();
     public void Copy() => Box.Document.Selection.Copy();
     public void SelectAll() => Select(0, _text.Length, false);

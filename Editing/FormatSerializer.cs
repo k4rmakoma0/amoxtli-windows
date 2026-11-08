@@ -14,7 +14,10 @@ public static partial class FormatSerializer
     private static readonly ConditionalWeakTable<IReadOnlyList<InlineRun>, string> InlineCache = new();
     private static readonly ConditionalWeakTable<IReadOnlyList<InlineRun>, string> CellCache = new();
 
-    public static string Serialize(IReadOnlyList<FormatParagraph> paragraphs)
+    public static string Serialize(IReadOnlyList<FormatParagraph> paragraphs) => Serialize(paragraphs, null);
+
+    /// <summary>Also fills <paramref name="offsets"/> with where each paragraph's block starts in the output.</summary>
+    public static string Serialize(IReadOnlyList<FormatParagraph> paragraphs, int[]? offsets)
     {
         var output = new StringBuilder();
         var markers = ListMarkers(paragraphs);
@@ -23,7 +26,11 @@ public static partial class FormatSerializer
         {
             var p = paragraphs[i];
             // An empty paragraph only exists while editing; an empty list item still keeps its marker.
-            if (p.Kind == BlockKind.Paragraph && p.Runs.Count == 0 && !StartsItem(previous, p)) continue;
+            if (p.Kind == BlockKind.Paragraph && p.Runs.Count == 0 && !StartsItem(previous, p))
+            {
+                if (offsets is not null) offsets[i] = output.Length;
+                continue;
+            }
             int end = i;
             if (p.Kind is BlockKind.Code or BlockKind.TableCell)
                 while (end + 1 < paragraphs.Count && paragraphs[end + 1].Kind == p.Kind && paragraphs[end + 1].BlockId == p.BlockId) end++;
@@ -40,6 +47,7 @@ public static partial class FormatSerializer
             {
                 if (NeedsBlankLine(previous, p)) output.Append(ContinuationPrefix(Common(previous, p), previous, markers).TrimEnd()).Append('\n');
             }
+            if (offsets is not null) for (int k = i; k <= end; k++) offsets[k] = output.Length;
             for (int line = 0; line < lines.Count; line++)
             {
                 string prefix = line == 0 ? FirstPrefix(previous, p, markers) : ContinuationPrefix(p.Containers, p, markers);

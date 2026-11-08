@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 using Windows.Storage.Pickers;
 using Windows.System;
 using WinRT.Interop;
+using DispatcherQueuePriority = Microsoft.UI.Dispatching.DispatcherQueuePriority;
 using DispatcherQueueTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
 
 namespace Amoxtli;
@@ -23,6 +24,7 @@ public sealed partial class MainWindow
     private EditorMode _mode = EditorMode.Format;
     private SourceEditor _sourceEditor = null!;
     private FormatEditor _formatEditor = null!;
+    private SplitScroll _splitScroll = null!;
     /// <summary>The read-only renderer stands in for the Format editor (documents over the editing limit, reader tests).</summary>
     private bool _useReader;
     private bool _formatFocused;
@@ -52,14 +54,15 @@ public sealed partial class MainWindow
         _sourceEditor.Shortcut = TryShortcut;
         _sourceEditor.Box.ContextFlyout = BuildContextMenu(false);
         SourceHost.Child = _sourceEditor;
-        _sourceEditor.Box.GotFocus += (_, _) => _formatFocused = false;
+        _sourceEditor.Box.GotFocus += (_, _) => { _formatFocused = false; CatchUpSource(); };
         _formatEditor = new FormatEditor(_settings, OpenLinkAsync, message => Notify(message, InfoBarSeverity.Warning)) { Shortcut = TryShortcut };
         _formatEditor.ContextMenu = BuildContextMenu(true);
         _formatEditor.Edited += FormatEditor_Edited;
         _formatEditor.SelectionMoved += ScheduleToolStates;
-        _formatEditor.FocusEntered += () => _formatFocused = true;
+        _formatEditor.FocusEntered += () => { _formatFocused = true; CatchUpFormat(); };
         _formatEditor.Scroll.ViewChanged += (_, _) => UpdateProgress();
         FormatHost.Child = _formatEditor;
+        _splitScroll = new SplitScroll(_sourceEditor, _formatEditor);
         _editTimer = DispatcherQueue.CreateTimer();
         _editTimer.Interval = TimeSpan.FromMilliseconds(200);
         _editTimer.IsRepeating = false;
@@ -151,6 +154,9 @@ public sealed partial class MainWindow
         else if (!reader) { _renderer?.Dispose(); _renderer = null; DocumentPanel.Children.Clear(); _formatEditor.Clear(); _readerStale = true; _matches = []; }
         UpdateModeControls();
         UpdateToolStates();
+        _splitScroll.Enabled = mode == EditorMode.Split && FormatEditing;
+        _splitScroll.Invalidate();
+        if (_splitScroll.Enabled) DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => _splitScroll.Follow(_splitScroll.Leader));
         if (source) _sourceEditor.Box.Focus(FocusState.Programmatic);
     }
 
@@ -188,6 +194,8 @@ public sealed partial class MainWindow
         UpdateDocument(_document with { Source = _sourceEditor.Text });
         if (wasDirty != _document.IsDirty) UpdateDocumentInfo();
         _readerStale = true;
+        _splitScroll.Invalidate();
+        _splitScroll.Edited(SplitScroll.Side.Source);
         _editTimer.Stop();
         _editTimer.Start();
     }
@@ -200,8 +208,25 @@ public sealed partial class MainWindow
         if (wasDirty != _document.IsDirty) UpdateDocumentInfo();
         // Source takes only the difference, keeping its caret, scroll and highlighting.
         if (_mode == EditorMode.Split) _sourceEditor.Replace(_formatEditor.Markdown);
+        _splitScroll.Edited(SplitScroll.Side.Format);
         _editTimer.Stop();
         _editTimer.Start();
+    }
+
+    /// <summary>Before taking edits, an editor that gains the focus catches up with the current text (port document, section 7.1).</summary>
+    private void CatchUpSource()
+    {
+        if (_mode != EditorMode.Format && _document is { } document && _sourceEditor.Text != document.Source) _sourceEditor.Replace(document.Source);
+    }
+
+    private void CatchUpFormat()
+    {
+        if (!FormatEditing || _document is not { } document || _formatEditor.Markdown == document.Source) return;
+        // Rebuilding replaces the field being focused; do it before any key reaches that field.
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.High, () =>
+        {
+            if (_document is { } current && _formatEditor.Markdown != current.Source) _formatEditor.Load(current.Source, current.Path, true);
+        });
     }
 
     private void Undo() { if (FormatActive) _formatEditor.Undo(); else ActiveEditor?.Undo(); }

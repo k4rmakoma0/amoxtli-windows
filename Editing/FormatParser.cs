@@ -68,10 +68,19 @@ public static class FormatParser
             int start = Math.Clamp(block.Span.Start, 0, source.Length);
             start = start == 0 ? 0 : source.LastIndexOf('\n', start - 1) + 1;
             int end = Math.Clamp(End(block) + 1, start, source.Length);
-            return new FormatParagraph { Kind = BlockKind.Raw, BlockId = ++_ids, Source = source[start..end].TrimEnd('\n', '\r') };
+            return new FormatParagraph { Kind = BlockKind.Raw, BlockId = ++_ids, Source = source[start..end].TrimEnd('\n', '\r'), SourceOffset = start };
         }
 
         public void Convert(Block block, IReadOnlyList<Container> containers, List<FormatParagraph> output)
+        {
+            int first = output.Count;
+            Add(block, containers, output);
+            // Nested blocks set their own offsets first; what is left starts where this block does.
+            for (int i = first; i < output.Count; i++)
+                if (output[i].SourceOffset < 0) output[i] = output[i] with { SourceOffset = Math.Max(0, block.Span.Start) };
+        }
+
+        private void Add(Block block, IReadOnlyList<Container> containers, List<FormatParagraph> output)
         {
             switch (block)
             {

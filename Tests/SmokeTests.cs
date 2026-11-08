@@ -353,6 +353,8 @@ public sealed partial class MainWindow
         _useReader = false;
         try { await RunFormatEditorTestsAsync(Check); }
         catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en el editor", passed = false, detail = ex.ToString() }); }
+        try { await RunSplitTestsAsync(Check); }
+        catch (Exception ex) { failed++; results.Add(new { name = "Excepción inesperada en Dividido", passed = false, detail = ex.ToString() }); }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new { passed, failed, results }, new JsonSerializerOptions { WriteIndented = true }));
     }

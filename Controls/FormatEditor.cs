@@ -23,6 +23,7 @@ internal sealed class FormatEditor : Grid
         public int First, Last;
         public BlockKind Kind;
         public RichField? Field;
+        public FrameworkElement? Element;
     }
 
     private readonly StackPanel _panel = new() { MaxWidth = 920, Padding = new Thickness(40, 32, 40, 64), HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -51,6 +52,9 @@ internal sealed class FormatEditor : Grid
     public event Action? Edited;
     public event Action? SelectionMoved;
     public event Action? FocusEntered;
+    /// <summary>The blocks were rebuilt, so their positions changed.</summary>
+    public event Action? Rebuilt;
+    private int[] _offsets = [];
 
     public FormatEditor(ReaderSettings settings, Func<string, bool, Task> openLink, Action<string> report)
     {
@@ -63,16 +67,41 @@ internal sealed class FormatEditor : Grid
         SizeChanged += (_, args) => _panel.Padding = new Thickness(args.NewSize.Width < 800 ? 24 : 40, 32, args.NewSize.Width < 800 ? 24 : 40, 64);
     }
 
-    /// <summary>Shows another document, or the same one changed elsewhere. Clears undo.</summary>
-    public void Load(string markdown, string? path)
+    /// <summary>
+    /// Shows another document, or the same one changed elsewhere, keeping scroll and caret. Clears undo.
+    /// With <paramref name="keepFocus"/>, the caret's field takes the keyboard focus back after the rebuild.
+    /// </summary>
+    public void Load(string markdown, string? path, bool keepFocus = false)
     {
+        var position = Position;
+        double offset = Scroll.VerticalOffset;
         _path = path;
-        _markdown = markdown;
         _paragraphs = FormatOperations.Ensure(FormatParser.Parse(markdown));
+        SetMarkdown(markdown, null);
         _history.Clear();
-        int focus = _focused is not null && Locate(_focused) is { } at ? at.Paragraph : -1;
         Rebuild();
-        if (focus >= 0) FocusParagraph(Math.Min(focus, _paragraphs.Count - 1), 0, false);
+        if (position is { } at) FocusParagraph(Math.Min(at.Paragraph, _paragraphs.Count - 1), at.Offset, keepFocus);
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => Scroll.ChangeView(null, offset, null, true));
+    }
+
+    /// <summary>The text and where each paragraph starts in it; read back from the parser unless the serializer gave them.</summary>
+    private void SetMarkdown(string markdown, int[]? offsets)
+    {
+        _markdown = markdown;
+        _offsets = offsets ?? _paragraphs.Select(p => p.SourceOffset < 0 ? markdown.Length : p.SourceOffset).ToArray();
+    }
+
+    /// <summary>Where each block starts in the Markdown, and its top in this view.</summary>
+    public IEnumerable<(int Offset, double Top)> BlockTops()
+    {
+        foreach (var block in _blocks)
+        {
+            if (block.Element is not { } element || block.First >= _offsets.Length) continue;
+            double top;
+            try { top = element.TransformToVisual(_panel).TransformPoint(new Windows.Foundation.Point()).Y; }
+            catch (ArgumentException) { continue; }
+            yield return (_offsets[block.First], top);
+        }
     }
 
     /// <summary>Releases fields and images, for example when the editor is hidden.</summary>
@@ -115,9 +144,11 @@ internal sealed class FormatEditor : Grid
                 _ => TextView(block)
             };
             _blocks.Add(block);
-            _panel.Children.Add(Wrap(i, view, numbers));
+            block.Element = Wrap(i, view, numbers);
+            _panel.Children.Add(block.Element);
             i = end + 1;
         }
+        Rebuilt?.Invoke();
     }
 
     private RichField NewField(BlockView block, int paragraph, bool multiline, bool heading)
@@ -362,10 +393,11 @@ internal sealed class FormatEditor : Grid
 
     private void Commit(bool typing)
     {
-        string markdown = FormatSerializer.Serialize(_paragraphs);
-        if (markdown == _markdown) return;
+        var offsets = new int[_paragraphs.Count];
+        string markdown = FormatSerializer.Serialize(_paragraphs, offsets);
+        if (markdown == _markdown) { _offsets = offsets; return; }
         _history.Record(_markdown, TextDiff.Compute(_markdown, markdown), typing);
-        _markdown = markdown;
+        SetMarkdown(markdown, offsets);
         Edited?.Invoke();
     }
 
@@ -375,8 +407,9 @@ internal sealed class FormatEditor : Grid
     private void Restore(TextEdit edit)
     {
         int focus = Position?.Paragraph ?? 0;
-        _markdown = edit.Apply(_markdown);
-        _paragraphs = FormatOperations.Ensure(FormatParser.Parse(_markdown));
+        string markdown = edit.Apply(_markdown);
+        _paragraphs = FormatOperations.Ensure(FormatParser.Parse(markdown));
+        SetMarkdown(markdown, null);
         Rebuild();
         FocusParagraph(Math.Min(focus, _paragraphs.Count - 1), 0);
         Edited?.Invoke();
@@ -532,8 +565,10 @@ internal sealed class FormatEditor : Grid
     private void OpenLinkAt(RichField field, PointerRoutedEventArgs e)
     {
         if (!SourceEditor.CurrentModifiers().HasFlag(VirtualKeyModifiers.Control)) return;
+        // Rich text measures in physical pixels; the pointer is in effective pixels.
         var point = e.GetCurrentPoint(field.Box).Position;
-        var range = field.Box.Document.GetRangeFromPoint(point, PointOptions.ClientCoordinates);
+        double scale = field.Box.XamlRoot?.RasterizationScale ?? 1;
+        var range = field.Box.Document.GetRangeFromPoint(new Windows.Foundation.Point(point.X * scale, point.Y * scale), PointOptions.ClientCoordinates);
         int at = range.StartPosition;
         if (field.ReadRuns(at, at + 1) is [{ Style: var style, Url: { } url }] && style.HasFlag(InlineStyle.Link))
         {

@@ -43,6 +43,8 @@ public sealed record FormatParagraph
     public IReadOnlyList<InlineRun> Runs { get; init; } = [];
     /// <summary>Verbatim Markdown for raw blocks and images.</summary>
     public string Source { get; init; } = "";
+    /// <summary>Where the paragraph's block starts in the Markdown it was read from, or -1. Pairs the two editors when scrolling.</summary>
+    public int SourceOffset { get; init; } = -1;
     /// <summary>A leading "#" that is text, not a heading mark: typing a space after it changes nothing.</summary>
     public bool LiteralHash { get; init; }
 
