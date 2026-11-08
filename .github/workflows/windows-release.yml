@@ -19,7 +19,7 @@ on:
       version:
         description: Installer version (major.minor.patch)
         type: string
-        default: '1.0.0'
+        default: '2.0.0'
         required: true
       sign:
         description: Request production signing (requires SignPath approval and configuration)
