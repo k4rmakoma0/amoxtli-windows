@@ -145,10 +145,44 @@ internal sealed class FormatEditor : Grid
             };
             _blocks.Add(block);
             block.Element = Wrap(i, view, numbers);
+            SetDirection(block, DirectionOf(block, _blocks.Count - 1));
             _panel.Children.Add(block.Element);
             i = end + 1;
         }
         Rebuilt?.Invoke();
+    }
+
+    /// <summary>
+    /// A paragraph, heading or table reads in the direction of its first letter, and its bullets and
+    /// quote bars follow; one without letters keeps the direction of the block before it. Code and
+    /// raw Markdown stay left to right.
+    /// </summary>
+    private FlowDirection DirectionOf(BlockView block, int position)
+    {
+        if (block.Kind is BlockKind.Code or BlockKind.Raw or BlockKind.Image or BlockKind.ThematicBreak) return FlowDirection.LeftToRight;
+        for (int i = block.First; i <= block.Last; i++)
+            if (TextDirection.FirstStrong(_paragraphs[i].Text) is { } rightToLeft)
+                return rightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        for (int before = position - 1; before >= 0; before--)
+            if (_blocks[before].Kind is not (BlockKind.Code or BlockKind.Raw or BlockKind.Image or BlockKind.ThematicBreak) && _blocks[before].Element is { } previous)
+                return previous.FlowDirection;
+        return FlowDirection.LeftToRight;
+    }
+
+    /// <summary>After typing, the block turns around when its first letter changed direction.</summary>
+    private void UpdateDirection(BlockView block)
+    {
+        if (block.Element is not { } element) return;
+        var direction = DirectionOf(block, _blocks.IndexOf(block));
+        if (element.FlowDirection != direction) SetDirection(block, direction);
+    }
+
+    /// <summary>The block's layout mirrors (bullets, quote bars, table columns), and its fields' text reads the same way.</summary>
+    private void SetDirection(BlockView block, FlowDirection direction)
+    {
+        if (block.Element is { } element) element.FlowDirection = direction;
+        foreach (var entry in _order)
+            if (entry.Block == block && !entry.Field.Multiline) entry.Field.SetDirection(direction == FlowDirection.RightToLeft);
     }
 
     private RichField NewField(BlockView block, int paragraph, bool multiline, bool heading)
@@ -357,7 +391,9 @@ internal sealed class FormatEditor : Grid
             bool header = p.Row == 0;
             var field = NewField(block, i, false, header);
             if (header) field.Box.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-            field.Box.TextAlignment = (p.Column < p.Alignments.Count ? p.Alignments[p.Column] : TableAlignment.None) switch
+            var alignment = p.Column < p.Alignments.Count ? p.Alignments[p.Column] : TableAlignment.None;
+            field.KeepsAlignment = alignment != TableAlignment.None;
+            field.Box.TextAlignment = alignment switch
             {
                 TableAlignment.Center => TextAlignment.Center,
                 TableAlignment.Right => TextAlignment.Right,
@@ -506,6 +542,7 @@ internal sealed class FormatEditor : Grid
         if (p.Kind == BlockKind.TableCell)
         {
             _paragraphs[index] = p;
+            UpdateDirection(block);
             Commit(true);
             return;
         }
@@ -514,6 +551,7 @@ internal sealed class FormatEditor : Grid
         if (FormatOperations.TypedHeading(p) is { } heading) { Restructure(Swap(index, heading), index, Math.Max(0, caret - p.Text.Length + heading.Text.Length)); return; }
         if (FormatOperations.Emptied(p) is { } plain) { Restructure(Swap(index, plain), index, 0); return; }
         _paragraphs[index] = p;
+        UpdateDirection(block);
         Commit(true);
     }
 

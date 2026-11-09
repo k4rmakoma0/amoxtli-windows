@@ -32,6 +32,7 @@ internal sealed class SourceEditor : Grid
     private readonly EditHistory _history = new();
     private readonly DispatcherQueueTimer _styleTimer;
     private string _text = "";
+    private string? _defaultLanguage;
     private bool _suppress, _contentChanging, _composing, _realized;
     private int _styledLines, _pendingFirst = -1, _pendingLast = -1;
     private EditorPalette _palette;
@@ -292,6 +293,25 @@ internal sealed class SourceEditor : Grid
         else _styleTimer.Stop();
     }
 
+    /// <summary>The direction of a line's first letter, or null when it has none.</summary>
+    private bool? LineDirection(int line)
+    {
+        int lineStart = _highlighter.LineStart(line), lineEnd = _highlighter.LineEnd(line);
+        var text = _text.AsSpan(lineStart, lineEnd - lineStart);
+        // Most lines have no character in the right-to-left blocks, which a span search rules out cheaply.
+        if (text.IndexOfAnyInRange('֐', '﻿') >= 0) return TextDirection.FirstStrongInLine(_text[lineStart..lineEnd]);
+        foreach (char c in text) if (char.IsLetter(c)) return false;
+        return null;
+    }
+
+    /// <summary>The direction carried into <paramref name="line"/> from the nearest line above with a letter.</summary>
+    private bool DirectionBefore(int line)
+    {
+        for (int above = line - 1; above >= 0 && above >= line - 200; above--)
+            if (!_highlighter.IsCode(above) && LineDirection(above) is { } rightToLeft) return rightToLeft;
+        return false;
+    }
+
     /// <summary>Character formats take points, while the box's FontSize is in effective pixels (96 per inch).</summary>
     internal static float Points(double pixels) => (float)(pixels * .75);
 
@@ -311,8 +331,28 @@ internal sealed class SourceEditor : Grid
             plain.Strikethrough = FormatEffect.Off;
             plain.ForegroundColor = _palette.Text;
             plain.BackgroundColor = Colors.Transparent;
+            _defaultLanguage ??= Box.Document.GetDefaultCharacterFormat().LanguageTag;
+            plain.LanguageTag = _defaultLanguage;
+            // Each line takes the direction of its first letter, and a line without letters (a table rule,
+            // a blank line) the direction of the line before; code stays left to right.
+            var paragraphs = Box.Document.GetRange(start, end).ParagraphFormat;
+            paragraphs.RightToLeft = FormatEffect.Off;
+            paragraphs.Alignment = ParagraphAlignment.Left;
+            bool rightToLeft = DirectionBefore(first);
             for (int line = first; line <= last; line++)
+            {
                 foreach (var span in _highlighter.GetSpans(line)) StyleSpan(span);
+                if (_highlighter.IsCode(line)) continue;
+                rightToLeft = LineDirection(line) ?? rightToLeft;
+                if (!rightToLeft) continue;
+                int lineStart = _highlighter.LineStart(line), lineEnd = _highlighter.LineEnd(line);
+                var range = Box.Document.GetRange(lineStart, lineEnd);
+                // Spaces and punctuation between scripts are placed by the language of the text.
+                range.CharacterFormat.LanguageTag = TextDirection.LanguageTag(_text[lineStart..lineEnd]);
+                var format = range.ParagraphFormat;
+                format.RightToLeft = FormatEffect.On;
+                format.Alignment = ParagraphAlignment.Right;
+            }
         }
         finally
         {
