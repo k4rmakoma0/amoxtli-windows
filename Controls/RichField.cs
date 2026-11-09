@@ -21,6 +21,7 @@ internal sealed class RichField
     private readonly List<Action> _whenRealized = [];
     private IReadOnlyList<InlineRun> _runs = [];
     private bool _realized, _suppress, _contentChanging;
+    private string? _defaultLanguage;
     private EditorPalette _palette;
 
     public RichEditBox Box { get; }
@@ -46,6 +47,7 @@ internal sealed class RichField
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0),
             MinHeight = 0,
+            // Direction is set on the text's paragraph format: rich edit text does not follow an inherited FlowDirection.
             FlowDirection = FlowDirection.LeftToRight,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
@@ -86,6 +88,29 @@ internal sealed class RichField
     }
 
     public bool IsRealized => _realized;
+    public bool RightToLeft { get; private set; }
+    /// <summary>A table cell aligned by its column keeps that alignment in either direction.</summary>
+    public bool KeepsAlignment { get; set; }
+
+    /// <summary>Reads the text right to left and aligns it to the right, or the reverse.</summary>
+    public void SetDirection(bool rightToLeft)
+    {
+        if (RightToLeft == rightToLeft) return;
+        RightToLeft = rightToLeft;
+        if (_realized) ApplyDirection();
+    }
+
+    private void ApplyDirection()
+    {
+        var all = Box.Document.GetRange(0, int.MaxValue);
+        // Spaces and punctuation between scripts are placed by the language of the text.
+        all.GetText(TextGetOptions.None, out string text);
+        _defaultLanguage ??= Box.Document.GetDefaultCharacterFormat().LanguageTag;
+        all.CharacterFormat.LanguageTag = RightToLeft ? TextDirection.LanguageTag(text) : _defaultLanguage;
+        var paragraphs = all.ParagraphFormat;
+        paragraphs.RightToLeft = RightToLeft ? FormatEffect.On : FormatEffect.Off;
+        if (!KeepsAlignment) paragraphs.Alignment = RightToLeft ? ParagraphAlignment.Right : ParagraphAlignment.Left;
+    }
     public int Length => ReadText().Length;
 
     public void SetContent(IReadOnlyList<InlineRun> runs, EditorPalette palette)
@@ -116,6 +141,7 @@ internal sealed class RichField
                 if (run.Style != InlineStyle.None) Format(offset, run.Text.Length, run.Style, run.Url);
                 offset += run.Text.Length;
             }
+            ApplyDirection();
         }
         finally { _suppress = false; _contentChanging = false; }
     }

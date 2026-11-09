@@ -71,13 +71,13 @@ Para generar el instalador x64 necesitas el SDK de .NET y las herramientas de Wi
 ```powershell
 .\scripts\Build-Installer.ps1
 # Para publicar otra versión:
-.\scripts\Build-Installer.ps1 -Version 1.0.1
+.\scripts\Build-Installer.ps1 -Version 2.0.1
 ```
 
 Sin `-Version`, usa los tres primeros componentes de la versión de `Package.appxmanifest`. Genera estos dos archivos para adjuntarlos a la release correspondiente:
 
-- `artifacts\releases\Amoxtli-1.0.0-windows-x64-setup.exe`
-- `artifacts\releases\Amoxtli-1.0.0-windows-x64-setup.exe.sha256`
+- `artifacts\releases\Amoxtli-2.0.0-windows-x64-setup.exe`
+- `artifacts\releases\Amoxtli-2.0.0-windows-x64-setup.exe.sha256`
 
 El instalador funciona en Windows 10 1809 o posterior compatible con x64, instala para el usuario actual en `%LOCALAPPDATA%\Programs\Amoxtli` y añade un acceso al menú Inicio y un desinstalador. El acceso al escritorio es opcional. La interfaz del instalador está disponible en español e inglés; la app conserva sus 12 idiomas.
 

@@ -4,6 +4,7 @@ using Amoxtli.Editing;
 using Amoxtli.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Windows.System;
 
 namespace Amoxtli;
@@ -184,6 +185,77 @@ public sealed partial class MainWindow
         _sourceEditor.Apply(new TextEdit(0, 0, "Inicio\n\n", 8, 0));
         await Task.Delay(500);
         Check("Fuente actualiza Formato", _formatEditor.Markdown.StartsWith("Inicio\n\n# Título dividido") && _formatEditor.Fields[0].ReadText() == "Inicio", Show(_formatEditor.Markdown[..Math.Min(40, _formatEditor.Markdown.Length)]));
+        SetMode(EditorMode.Format);
+
+        // Columns fit their text instead of collapsing to the minimum width.
+        const string shortcuts = "| Acción | Atajo |\n| --- | --- |\n| Buscar en el documento | Ctrl+F |\n| Guardar | Ctrl+S |\n";
+        Navigate(new ReadingDocument(shortcuts, null, "Atajos"), MarkdownService.Parse(shortcuts));
+        await Task.Delay(400);
+        var wide = _formatEditor.Fields.FirstOrDefault(f => f.ReadText() == "Buscar en el documento");
+        var shortcut = _formatEditor.Fields.FirstOrDefault(f => f.ReadText() == "Ctrl+F");
+        if (wide is null || shortcut is null)
+            throw new InvalidOperationException("Celdas: " + string.Join(" | ", _formatEditor.Fields.Select(f => $"'{f.ReadText()}' {f.IsRealized} {f.Box.ActualWidth}")));
+        var wideCell = (Border)VisualTreeHelper.GetParent(wide.Box);
+        var table = (Grid)VisualTreeHelper.GetParent(wideCell);
+        double natural0 = table.ColumnDefinitions[0].MaxWidth, natural1 = table.ColumnDefinitions[1].MaxWidth;
+        double room = ((FrameworkElement)VisualTreeHelper.GetParent(table)).ActualWidth;
+        // With room, a column gets its natural width; without, the columns shrink together to fit.
+        double expected0 = natural0 + natural1 <= room ? natural0 : room - Math.Max(72, Math.Floor(natural1 * room / (natural0 + natural1)));
+        Check("La columna cabe su texto", natural0 >= FormatEditor.CellWidth("Buscar en el documento", wide.Box, wideCell.Padding) - .5
+            && Math.Abs(table.ColumnDefinitions[0].ActualWidth - expected0) <= 2 && table.ActualWidth <= room + .5,
+            $"natural {natural0}, esperado {expected0}, real {table.ColumnDefinitions[0].ActualWidth}, tabla {table.ActualWidth}, espacio {room}");
+        Check("Una columna corta no se estira", natural1 < natural0 && table.ColumnDefinitions[1].ActualWidth <= natural1 + .5, $"{natural1} {table.ColumnDefinitions[1].ActualWidth}");
+        double rowHeight = wideCell.ActualHeight;
+        Check("Las filas de una línea miden lo mismo", _formatEditor.Fields.Where(f => f.ReadText() is "Guardar" or "Acción").All(f => Math.Abs(((Border)VisualTreeHelper.GetParent(f.Box)).ActualHeight - rowHeight) <= 1),
+            string.Join(", ", _formatEditor.Fields.Select(f => VisualTreeHelper.GetParent(f.Box)).OfType<Border>().Select(b => b.ActualHeight)));
+        shortcut.Box.Focus(FocusState.Programmatic);
+        shortcut.Select(shortcut.Length);
+        shortcut.Box.Document.Selection.TypeText(" o Mayús+F3 desde cualquier lugar");
+        await Task.Delay(400);
+        shortcut = _formatEditor.Fields.First(f => f.ReadText().StartsWith("Ctrl+F"));
+        table = (Grid)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(shortcut.Box));
+        Check("La columna crece al escribir", table.ColumnDefinitions[1].MaxWidth > natural1 + 100, $"{natural1} → {table.ColumnDefinitions[1].MaxWidth}");
+        if (_document is { IsDirty: true } edited) UpdateDocument(edited with { Source = edited.Saved });
+
+        // Each paragraph reads in the direction of its first letter.
+        Check("Dirección por la primera letra", TextDirection.FirstStrong("مرحبًا Amoxtli") == true && TextDirection.FirstStrong("Amoxtli مرحبًا") == false
+            && TextDirection.FirstStrong("123 — ٤٥") is null && TextDirection.FirstStrong("**Ctrl+O** افتح") == false && TextDirection.FirstStrong("שלום") == true);
+        Check("Las marcas de Markdown no deciden la dirección", TextDirection.IsRightToLeftLine("- [x] مهمة") && TextDirection.IsRightToLeftLine("> 1. مرحبًا")
+            && TextDirection.IsRightToLeftLine("# مرحبًا") && !TextDirection.IsRightToLeftLine("- [x] task") && TextDirection.IsRightToLeftLine("| الإجراء | Ctrl |"));
+        const string bidi = "# مرحبًا بك في Amoxtli\n\nEnglish text.\n\n```js\nlet a = 1;\n```\n\n- [x] مهمة\n\n| الإجراء | Ctrl |\n| --- | --- |\n| حفظ | Ctrl+S |\n";
+        Navigate(new ReadingDocument(bidi, null, "Bidi"), MarkdownService.Parse(bidi));
+        await Task.Delay(400);
+        bool RightToLeftField(string text) => _formatEditor.Fields.First(f => f.ReadText() == text) is { RightToLeft: true } field
+            && field.Box.Document.GetRange(0, 0).ParagraphFormat.RightToLeft == Microsoft.UI.Text.FormatEffect.On;
+        Check("Formato: título árabe de derecha a izquierda", RightToLeftField("مرحبًا بك في Amoxtli"));
+        Check("Formato: párrafo inglés de izquierda a derecha", !RightToLeftField("English text."));
+        string Language(string text) => _formatEditor.Fields.First(f => f.ReadText() == text).Box.Document.GetRange(0, 1).CharacterFormat.LanguageTag;
+        Check("Formato: el árabe lleva su idioma para ubicar espacios y puntos", Language("مرحبًا بك في Amoxtli").StartsWith("ar") && !Language("English text.").StartsWith("ar")
+            && TextDirection.LanguageTag("שלום") == "he" && TextDirection.LanguageTag("- مرحبا") == "ar", Language("مرحبًا بك في Amoxtli") + " / " + Language("English text."));
+        Check("Formato: el código queda de izquierda a derecha", !_formatEditor.Fields.First(f => f.Multiline).RightToLeft);
+        Check("Formato: lista y tabla árabes de derecha a izquierda", RightToLeftField("مهمة") && RightToLeftField("Ctrl+S"));
+        var english = _formatEditor.Fields.First(f => f.ReadText() == "English text.");
+        english.Box.Focus(FocusState.Programmatic);
+        english.Select(0);
+        english.Box.Document.Selection.TypeText("نص ");
+        await Task.Delay(100);
+        english = _formatEditor.Fields.First(f => f.ReadText() == "نص English text.");
+        Check("Formato: la dirección cambia al escribir", english.RightToLeft && english.Box.Document.GetRange(0, 0).ParagraphFormat.RightToLeft == Microsoft.UI.Text.FormatEffect.On);
+        if (_document is { IsDirty: true } turned) UpdateDocument(turned with { Source = turned.Saved });
+        Navigate(new ReadingDocument(bidi, null, "Bidi"), MarkdownService.Parse(bidi));
+        SetMode(EditorMode.Source);
+        await Task.Delay(400);
+        bool LineRightToLeft(string line)
+        {
+            int at = _sourceEditor.Text.IndexOf(line);
+            return at >= 0 && _sourceEditor.Box.Document.GetRange(at, at).ParagraphFormat.RightToLeft == Microsoft.UI.Text.FormatEffect.On;
+        }
+        Check("Fuente: cada línea toma su dirección", LineRightToLeft("# مرحبًا") && !LineRightToLeft("English text.") && !LineRightToLeft("let a = 1;")
+            && LineRightToLeft("- [x] مهمة") && LineRightToLeft("| حفظ") && LineRightToLeft("| --- | --- |"));
+        int arabicLine = _sourceEditor.Text.IndexOf("مرحبًا"), englishLine = _sourceEditor.Text.IndexOf("English");
+        Check("Fuente: el árabe lleva su idioma", _sourceEditor.Box.Document.GetRange(arabicLine, arabicLine + 1).CharacterFormat.LanguageTag.StartsWith("ar")
+            && !_sourceEditor.Box.Document.GetRange(englishLine, englishLine + 1).CharacterFormat.LanguageTag.StartsWith("ar"),
+            _sourceEditor.Box.Document.GetRange(arabicLine, arabicLine + 1).CharacterFormat.LanguageTag);
         SetMode(EditorMode.Format);
 
         Navigate(new ReadingDocument("# Fin del Formato", null, "Fin"), MarkdownService.Parse("# Fin del Formato"));

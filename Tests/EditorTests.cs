@@ -269,7 +269,10 @@ public sealed partial class MainWindow
         Check("Aa marca el tipo de letra", _typefaceItems.Single(item => item.Item.IsChecked).Typeface == Typesetting.Serif);
         SetMode(EditorMode.Source);
         Check("Fuente usa el tipo de letra y el tamaño", _sourceEditor.Box.FontFamily.Source == "Georgia" && _sourceEditor.Box.FontSize == 20
-            && _sourceEditor.Box.Document.GetRange(2, 3).CharacterFormat.Size > 20);
+            && _sourceEditor.Box.Document.GetRange(2, 3).CharacterFormat.Size > 15.5);
+        int bodyAt = _sourceEditor.Text.IndexOf("Texto");
+        Check("Fuente mide el texto como Formato", bodyAt >= 0 && Math.Abs(_sourceEditor.Box.Document.GetRange(bodyAt, bodyAt + 1).CharacterFormat.Size - 15) < .1,
+            bodyAt >= 0 ? _sourceEditor.Box.Document.GetRange(bodyAt, bodyAt + 1).CharacterFormat.Size.ToString() : "sin texto");
         _settings.Typeface = Typesetting.Monospace;
         ApplyTypography();
         Check("Fuente monoespaciada en todo el editor", _sourceEditor.Box.FontFamily.Source == Typesetting.FontFamily(Typesetting.Monospace));

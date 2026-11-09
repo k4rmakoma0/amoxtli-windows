@@ -364,6 +364,7 @@
     <MainPackageIdentityName>k4rmakoma.AmoxtliMarkdownViewer</MainPackageIdentityName>
     <ReservedNames>
       <ReservedName>Amoxtli: Markdown Viewer</ReservedName>
+      <ReservedName>Amoxtli: Markdown Editor</ReservedName>
     </ReservedNames>
   </ProductReservedInfo>
   <AccountPackageIdentityNames />
