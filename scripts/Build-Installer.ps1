@@ -47,6 +47,10 @@ if ($PrepareSigning) {
 }
 New-Item -ItemType Directory -Path $publishDirectory, $releaseDirectory -Force | Out-Null
 
+# The build's own obj and bin folders live outside the project: inside it, the generated sources in obj
+# would be compiled again by the next build of the project.
+$compileDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('amoxtli-installer-' + [guid]::NewGuid().ToString('N'))
+
 $previousWorkloadResolver = $env:MSBuildEnableWorkloadResolver
 Push-Location $projectRoot
 try {
@@ -58,6 +62,7 @@ try {
         -p:BuildAppxUploadPackageForUap=false -p:BuildAppxSideloadPackageForUap=false `
         -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false `
         "-p:Version=$Version" -p:IncludeSourceRevisionInInformationalVersion=false -p:Product=Amoxtli "-p:Company=Alan Anaya" `
+        "-p:IntermediateOutputPath=$compileDirectory\obj\" "-p:OutputPath=$compileDirectory\bin\" `
         "-p:PublishDir=$publishDirectory\" -v:minimal
       if ($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la app autocontenida.' }
     }
@@ -66,6 +71,12 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory $requiredFile) -PathType Leaf)) {
             throw "Falta un archivo requerido en la publicación: $requiredFile"
         }
+    }
+    # The build gets its own obj and bin folders: a Store (MSIX) build leaves a packaged resource index
+    # in obj\x64\Release that, reused here, ships without WinUI's resources and crashes the app at startup.
+    $resourceIndex = [System.Text.Encoding]::Latin1.GetString([System.IO.File]::ReadAllBytes((Join-Path $publishDirectory 'Amoxtli.pri')))
+    if (-not $resourceIndex.Contains('Microsoft.UI.Xaml') -or -not $resourceIndex.Contains('generic.xbf')) {
+        throw 'Amoxtli.pri no incluye los recursos de WinUI; la app no arrancaría sin paquete.'
     }
 
     $compilerArguments = @('/Q', "/DAppVersion=$Version", "/DPublishDirectory=$PublishDirectory", "/DReleaseDirectory=$ReleaseDirectory")
@@ -125,4 +136,5 @@ try {
 finally {
     $env:MSBuildEnableWorkloadResolver = $previousWorkloadResolver
     Pop-Location
+    Remove-Item -LiteralPath $compileDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }
