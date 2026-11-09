@@ -47,6 +47,10 @@ if ($PrepareSigning) {
 }
 New-Item -ItemType Directory -Path $publishDirectory, $releaseDirectory -Force | Out-Null
 
+# The build's own obj and bin folders live outside the project: inside it, the generated sources in obj
+# would be compiled again by the next build of the project.
+$compileDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('amoxtli-installer-' + [guid]::NewGuid().ToString('N'))
+
 $previousWorkloadResolver = $env:MSBuildEnableWorkloadResolver
 Push-Location $projectRoot
 try {
@@ -58,7 +62,7 @@ try {
         -p:BuildAppxUploadPackageForUap=false -p:BuildAppxSideloadPackageForUap=false `
         -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false `
         "-p:Version=$Version" -p:IncludeSourceRevisionInInformationalVersion=false -p:Product=Amoxtli "-p:Company=Alan Anaya" `
-        "-p:IntermediateOutputPath=$buildDirectory\obj\" "-p:OutputPath=$buildDirectory\bin\" `
+        "-p:IntermediateOutputPath=$compileDirectory\obj\" "-p:OutputPath=$compileDirectory\bin\" `
         "-p:PublishDir=$publishDirectory\" -v:minimal
       if ($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la app autocontenida.' }
     }
@@ -132,4 +136,5 @@ try {
 finally {
     $env:MSBuildEnableWorkloadResolver = $previousWorkloadResolver
     Pop-Location
+    Remove-Item -LiteralPath $compileDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }
