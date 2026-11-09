@@ -80,6 +80,20 @@ public sealed partial class MainWindow
         Check("Palomita en el lenguaje actual", items.OfType<RadioMenuFlyoutItem>().Single(i => i.IsChecked).Text == "Swift");
         Check("Menú contextual ofrece Lenguaje en código", _formatEditor.ActiveCodeParagraph is not null);
 
+        // The Copy button puts the whole block on the clipboard, without its fences.
+        var copyButtons = Tree(_formatEditor).OfType<FormatEditor.CopyCodeButton>().ToList();
+        Check("Botón Copiar junto al chip", copyButtons.Count == 1 && copyButtons[0].Label.Text == Localization.Get("Copy") && copyButtons[0].ActualHeight > 0
+            && copyButtons[0].Parent == chips[0].Parent);
+        string? copied = _formatEditor.CopyCode(copyButtons[0]);
+        string clip = "";
+        try { clip = await Windows.ApplicationModel.DataTransfer.Clipboard.GetContent().GetTextAsync(); } catch (Exception ex) { clip = ex.Message; }
+        string whole = code.ReadText();
+        Check("Copiar pone todo el bloque en el portapapeles", copied == whole && whole.Split('\n').Length >= 3 && whole.StartsWith("let a = \"x\" // c\n/* uno\ndos */")
+            && clip == whole.Replace("\n", "\r\n") && !clip.Contains("```"), clip);
+        Check("El botón confirma la copia", copyButtons[0].Label.Text == Localization.Get("Copied"));
+        await Task.Delay(1800);
+        Check("Y vuelve a decir Copiar", copyButtons[0].Label.Text == Localization.Get("Copy"));
+
         _formatEditor.SetLanguage(paragraph, CodeLanguage.Json);
         Check("Elegir escribe el fence", _formatEditor.Markdown.Contains("```json\nlet a"), _formatEditor.Markdown);
         _formatEditor.Undo();

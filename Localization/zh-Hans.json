@@ -104,6 +104,8 @@
   "CopyLink": "复制链接地址",
   "Code": "代码",
   "Copy": "复制",
+  "Copied": "已复制",
+  "CopyCode": "复制代码",
   "Image": "图片",
   "DocumentImage": "文档图片",
   "UnresolvedImage": "无法解析图片路径",
