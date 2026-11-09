@@ -205,9 +205,21 @@ public sealed partial class MainWindow
             && Math.Abs(table.ColumnDefinitions[0].ActualWidth - expected0) <= 2 && table.ActualWidth <= room + .5,
             $"natural {natural0}, esperado {expected0}, real {table.ColumnDefinitions[0].ActualWidth}, tabla {table.ActualWidth}, espacio {room}");
         Check("Una columna corta no se estira", natural1 < natural0 && table.ColumnDefinitions[1].ActualWidth <= natural1 + .5, $"{natural1} {table.ColumnDefinitions[1].ActualWidth}");
-        double rowHeight = wideCell.ActualHeight;
-        Check("Las filas de una línea miden lo mismo", _formatEditor.Fields.Where(f => f.ReadText() is "Guardar" or "Acción").All(f => Math.Abs(((Border)VisualTreeHelper.GetParent(f.Box)).ActualHeight - rowHeight) <= 1),
-            string.Join(", ", _formatEditor.Fields.Select(f => VisualTreeHelper.GetParent(f.Box)).OfType<Border>().Select(b => b.ActualHeight)));
+        await Task.Delay(500);
+        double CellHeight(string text) => ((Border)VisualTreeHelper.GetParent(_formatEditor.Fields.First(f => f.ReadText() == text).Box)).ActualHeight;
+        bool squeezed = table.ColumnDefinitions[0].ActualWidth < natural0 - 1;
+        Check("Las filas de una línea miden lo mismo", Math.Abs(CellHeight("Guardar") - CellHeight("Acción")) <= 1
+            && (squeezed ? CellHeight("Buscar en el documento") > CellHeight("Guardar") + 5 : Math.Abs(CellHeight("Buscar en el documento") - CellHeight("Guardar")) <= 1),
+            string.Join(", ", _formatEditor.Fields.Select(f => VisualTreeHelper.GetParent(f.Box)).OfType<Border>().Select(b => b.ActualHeight)) + $" angosta {squeezed}");
+        // Narrow enough to wrap the cells, then wide enough for one line each: rows must shrink back.
+        _formatEditor.Width = 320;
+        await Task.Delay(400);
+        _formatEditor.Width = 1400;
+        await Task.Delay(600);
+        var cellHeights = _formatEditor.Fields.Select(f => VisualTreeHelper.GetParent(f.Box)).OfType<Border>().Select(b => b.ActualHeight).ToList();
+        Check("Al ensanchar, las filas vuelven a una línea", cellHeights.Count == 6 && cellHeights.Max() - cellHeights.Min() <= 1, string.Join(", ", cellHeights));
+        _formatEditor.Width = double.NaN;
+        await Task.Delay(300);
         shortcut.Box.Focus(FocusState.Programmatic);
         shortcut.Select(shortcut.Length);
         shortcut.Box.Document.Selection.TypeText(" o Mayús+F3 desde cualquier lugar");
