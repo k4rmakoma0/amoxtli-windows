@@ -58,6 +58,7 @@ try {
         -p:BuildAppxUploadPackageForUap=false -p:BuildAppxSideloadPackageForUap=false `
         -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false `
         "-p:Version=$Version" -p:IncludeSourceRevisionInInformationalVersion=false -p:Product=Amoxtli "-p:Company=Alan Anaya" `
+        "-p:IntermediateOutputPath=$buildDirectory\obj\" "-p:OutputPath=$buildDirectory\bin\" `
         "-p:PublishDir=$publishDirectory\" -v:minimal
       if ($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la app autocontenida.' }
     }
@@ -66,6 +67,12 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory $requiredFile) -PathType Leaf)) {
             throw "Falta un archivo requerido en la publicación: $requiredFile"
         }
+    }
+    # The build gets its own obj and bin folders: a Store (MSIX) build leaves a packaged resource index
+    # in obj\x64\Release that, reused here, ships without WinUI's resources and crashes the app at startup.
+    $resourceIndex = [System.Text.Encoding]::Latin1.GetString([System.IO.File]::ReadAllBytes((Join-Path $publishDirectory 'Amoxtli.pri')))
+    if (-not $resourceIndex.Contains('Microsoft.UI.Xaml') -or -not $resourceIndex.Contains('generic.xbf')) {
+        throw 'Amoxtli.pri no incluye los recursos de WinUI; la app no arrancaría sin paquete.'
     }
 
     $compilerArguments = @('/Q', "/DAppVersion=$Version", "/DPublishDirectory=$PublishDirectory", "/DReleaseDirectory=$ReleaseDirectory")
