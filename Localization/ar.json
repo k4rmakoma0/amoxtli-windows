@@ -104,6 +104,8 @@
   "CopyLink": "نسخ عنوان الرابط",
   "Code": "شيفرة",
   "Copy": "نسخ",
+  "Copied": "تم النسخ",
+  "CopyCode": "نسخ الشيفرة",
   "Image": "صورة",
   "DocumentImage": "صورة المستند",
   "UnresolvedImage": "تعذر حل مسار الصورة",

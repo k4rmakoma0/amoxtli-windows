@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
 
 namespace Amoxtli.Controls;
@@ -219,7 +220,10 @@ internal sealed class FormatEditor : Grid
         return field.Box;
     }
 
-    /// <summary>A code block: a strip with the language chip at the top right, then the code, colored by language.</summary>
+    /// <summary>
+    /// A code block: a strip with the Copy button and the language chip at the top right, then the code,
+    /// colored by language.
+    /// </summary>
     private FrameworkElement CodeView(BlockView block)
     {
         var field = NewField(block, block.First, true, false);
@@ -231,8 +235,10 @@ internal sealed class FormatEditor : Grid
         var grid = new Grid { RowSpacing = 4 };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var chip = LanguageChip(block, info);
-        grid.Children.Add(chip);
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right };
+        tools.Children.Add(CopyButton(block));
+        tools.Children.Add(LanguageChip(block, info));
+        grid.Children.Add(tools);
         Grid.SetRow(field.Box, 1);
         grid.Children.Add(field.Box);
         return new Border
@@ -276,6 +282,77 @@ internal sealed class FormatEditor : Grid
         AutomationProperties.SetName(chip, $"{Localization.Get("CodeLanguage")}: {label}");
         chip.Click += (_, _) => OpenLanguageMenu(chip);
         return chip;
+    }
+
+    /// <summary>The Copy button of a code block, styled like the language chip.</summary>
+    internal sealed class CopyCodeButton : Button
+    {
+        public CopyCodeButton() => ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Hand);
+        public FontIcon Icon { get; } = new() { Glyph = "", FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        public TextBlock Label { get; } = new() { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        public Microsoft.UI.Dispatching.DispatcherQueueTimer? Restore { get; set; }
+    }
+
+    private static readonly TimeSpan CopiedFeedback = TimeSpan.FromSeconds(1.5);
+
+    private Button CopyButton(BlockView block)
+    {
+        var button = new CopyCodeButton
+        {
+            Padding = new Thickness(8, 2, 10, 3),
+            MinHeight = 0,
+            CornerRadius = new CornerRadius(6),
+            Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+            BorderThickness = new Thickness(0),
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            IsTabStop = true,
+            Tag = block
+        };
+        button.Label.Text = Localization.Get("Copy");
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        content.Children.Add(button.Icon);
+        content.Children.Add(button.Label);
+        button.Content = content;
+        AutomationProperties.SetName(button, Localization.Get("CopyCode"));
+        ToolTipService.SetToolTip(button, Localization.Get("CopyCode"));
+        button.Click += (_, _) => CopyCode(button);
+        return button;
+    }
+
+    /// <summary>
+    /// Puts the whole block's code on the clipboard as plain text, without the fences, and shows
+    /// "Copied" on the button for a moment.
+    /// </summary>
+    internal string? CopyCode(Button sender)
+    {
+        if (sender is not CopyCodeButton button || button.Tag is not BlockView block || block.Field is not { } field) return null;
+        string code = field.ReadText();
+        try
+        {
+            var data = new DataPackage();
+            data.SetText(code.Replace("\n", "\r\n"));
+            Clipboard.SetContent(data);
+        }
+        catch (Exception ex)
+        {
+            _report(Localization.Format("CopyError", ex.Message));
+            return null;
+        }
+        button.Icon.Glyph = "";
+        button.Label.Text = Localization.Get("Copied");
+        button.Restore ??= DispatcherQueue.CreateTimer();
+        button.Restore.Interval = CopiedFeedback;
+        button.Restore.IsRepeating = false;
+        button.Restore.Tick += Reset;
+        button.Restore.Start();
+        return code;
+
+        void Reset(Microsoft.UI.Dispatching.DispatcherQueueTimer timer, object _)
+        {
+            timer.Tick -= Reset;
+            button.Icon.Glyph = "";
+            button.Label.Text = Localization.Get("Copy");
+        }
     }
 
     /// <summary>Clicking the chip moves the caret into its block when it was elsewhere, then opens the menu below it.</summary>

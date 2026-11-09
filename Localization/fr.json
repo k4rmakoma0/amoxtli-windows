@@ -104,6 +104,8 @@
   "CopyLink": "Copier l’adresse du lien",
   "Code": "Code",
   "Copy": "Copier",
+  "Copied": "Copié",
+  "CopyCode": "Copier le code",
   "Image": "Image",
   "DocumentImage": "Image du document",
   "UnresolvedImage": "impossible de résoudre le chemin de l’image",

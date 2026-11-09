@@ -104,6 +104,8 @@
   "CopyLink": "リンクのアドレスをコピー",
   "Code": "コード",
   "Copy": "コピー",
+  "Copied": "コピーしました",
+  "CopyCode": "コードをコピー",
   "Image": "画像",
   "DocumentImage": "ドキュメントの画像",
   "UnresolvedImage": "画像のパスを解決できませんでした",

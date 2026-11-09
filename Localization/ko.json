@@ -104,6 +104,8 @@
   "CopyLink": "링크 주소 복사",
   "Code": "코드",
   "Copy": "복사",
+  "Copied": "복사됨",
+  "CopyCode": "코드 복사",
   "Image": "이미지",
   "DocumentImage": "문서 이미지",
   "UnresolvedImage": "이미지 경로를 확인할 수 없습니다",
