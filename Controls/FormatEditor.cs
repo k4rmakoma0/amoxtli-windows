@@ -438,20 +438,11 @@ internal sealed class FormatEditor : Grid
                 if (flexible == 0 || pinned + flexible * scale <= room) break;
                 scale = Math.Max(0, room - pinned) / flexible;
             }
-            bool changed = false;
             foreach (var definition in grid.ColumnDefinitions)
             {
                 double width = Math.Floor(Math.Max(TableColumnMinimum, definition.MaxWidth * scale));
-                if (definition.Width.Value != width || !definition.Width.IsAbsolute) { definition.Width = new GridLength(width); changed = true; }
+                if (definition.Width.Value != width || !definition.Width.IsAbsolute) definition.Width = new GridLength(width);
             }
-            // A rich edit box measures its height from the line layout of its previous width, so after
-            // a column widens its row keeps the height of the wrapped text. Measuring again once the new
-            // width is arranged brings the row back to its text.
-            if (changed)
-                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
-                {
-                    foreach (var child in grid.Children) if (child is Border { Child: RichEditBox box }) box.InvalidateMeasure();
-                });
         }
         void Fit(int column)
         {
@@ -459,7 +450,25 @@ internal sealed class FormatEditor : Grid
             for (int r = 0; r < rows; r++) natural = Math.Max(natural, widths[column, r]);
             grid.ColumnDefinitions[column].MaxWidth = natural;
         }
-        host.SizeChanged += (_, args) => { if (args.NewSize.Width != args.PreviousSize.Width) Layout(); };
+        // Rich edit can keep the line layout of text it wrapped before its font or final width arrived, and
+        // report that height even after measuring again, which leaves rows too tall. Once the table has been
+        // still for a moment, cells not being edited lay their text out again by switching wrapping off and on.
+        var settle = DispatcherQueue.CreateTimer();
+        settle.Interval = TableSettle;
+        settle.IsRepeating = false;
+        settle.Tick += (_, _) =>
+        {
+            foreach (var child in grid.Children)
+            {
+                if (child is not Border { Child: RichEditBox box } || box.FocusState != FocusState.Unfocused) continue;
+                box.TextWrapping = TextWrapping.NoWrap;
+                box.TextWrapping = TextWrapping.Wrap;
+                box.InvalidateMeasure();
+            }
+        };
+        void Settle() { settle.Stop(); settle.Start(); }
+        host.Unloaded += (_, _) => settle.Stop();
+        host.SizeChanged += (_, args) => { if (args.NewSize.Width != args.PreviousSize.Width) Layout(); Settle(); };
         var stroke = new SolidColorBrush(EditorPalette.TableLineSurface(ActualTheme));
         var headerSurface = new SolidColorBrush(EditorPalette.TableHeaderSurface(ActualTheme));
         foreach (int i in cells)
@@ -488,6 +497,7 @@ internal sealed class FormatEditor : Grid
             };
             Grid.SetRow(cell, p.Row); Grid.SetColumn(cell, p.Column);
             grid.Children.Add(cell);
+            field.Box.SizeChanged += (_, _) => Settle();
             int column = p.Column, row = p.Row;
             widths[column, row] = CellWidth(string.Concat(p.Runs.Select(run => run.Text)), field.Box, cell.Padding);
             field.Changed += changed =>
@@ -505,6 +515,7 @@ internal sealed class FormatEditor : Grid
     }
 
     private const double TableColumnMinimum = 72;
+    private static readonly TimeSpan TableSettle = TimeSpan.FromMilliseconds(300);
 
     /// <summary>The width a cell needs to show its longest line unwrapped, caret and bold runs included.</summary>
     internal static double CellWidth(string text, RichEditBox like, Thickness padding)
