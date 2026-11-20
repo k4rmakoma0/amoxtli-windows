@@ -6,6 +6,7 @@ public sealed class ReaderSettings
 {
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Amoxtli", "settings.json");
     public bool RemoteImages { get; set; } = true;
+    public bool RestoreRecentOnStartup { get; set; } = true;
     public double FontSize { get; set; } = Typesetting.DefaultSize;
     public string Typeface { get; set; } = Typesetting.System;
     public string Theme { get; set; } = "Default";

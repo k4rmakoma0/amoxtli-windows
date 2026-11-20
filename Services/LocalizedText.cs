@@ -50,6 +50,7 @@ public sealed class LocalizedText : DependencyObject
                 case TextBlock block: block.Text = text; break;
                 case TextBox box: box.PlaceholderText = text; break;
                 case MenuBarItem item: item.Title = text; break;
+                case MenuFlyoutSubItem item: item.Text = text; break;
                 case ToggleMenuFlyoutItem item: item.Text = text; break;
                 case MenuFlyoutItem item: item.Text = text; break;
                 case PivotItem item: item.Header = text; break;

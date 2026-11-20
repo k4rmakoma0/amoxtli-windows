@@ -145,7 +145,7 @@ public sealed partial class MainWindow
         else UpdateModeControls();
     }
 
-    internal void SetMode(EditorMode mode)
+    internal void SetMode(EditorMode mode, bool focusSource = true)
     {
         if (mode == _mode) { UpdateModeControls(); return; }
         bool wasSource = _mode != EditorMode.Format;
@@ -169,7 +169,7 @@ public sealed partial class MainWindow
         _splitScroll.Enabled = mode == EditorMode.Split && FormatEditing;
         _splitScroll.Invalidate();
         if (_splitScroll.Enabled) DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => _splitScroll.Follow(_splitScroll.Leader));
-        if (source) _sourceEditor.Box.Focus(FocusState.Programmatic);
+        if (source && focusSource) _sourceEditor.Box.Focus(FocusState.Programmatic);
     }
 
     /// <summary>Format and Split show the Format editor, or the reader for documents over the editing limit.</summary>
@@ -194,7 +194,9 @@ public sealed partial class MainWindow
 
     private void TooLargeSource_Click(object sender, RoutedEventArgs e) => SetMode(EditorMode.Source);
 
-    private void TooLargeRead_Click(object sender, RoutedEventArgs e)
+    private void TooLargeRead_Click(object sender, RoutedEventArgs e) => ShowLargeReader();
+
+    private void ShowLargeReader()
     {
         _largeReader = true;
         UpdateFormatSurface();
@@ -706,7 +708,11 @@ public sealed partial class MainWindow
         // Typing during the write leaves the newer text unsaved.
         UpdateDocument(current with { Saved = text, Path = path, Name = System.IO.Path.GetFileName(path), Kind = DocumentKind.File, Format = format, Stamp = DocumentFile.Stamp(path) });
         UpdateDocumentInfo();
-        if (moved) WatchCurrentFile();
+        if (moved)
+        {
+            WatchCurrentFile();
+            RememberDocument(path);
+        }
         return true;
     }
 
@@ -741,8 +747,14 @@ public sealed partial class MainWindow
 
     private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
+        SaveRecentPosition();
         if (_closeConfirmed || _document is not { IsDirty: true }) return;
         args.Cancel = true;
-        if (await ConfirmLeaveAsync()) { _closeConfirmed = true; Close(); }
+        if (await ConfirmLeaveAsync())
+        {
+            SaveRecentPosition();
+            _closeConfirmed = true;
+            Close();
+        }
     }
 }

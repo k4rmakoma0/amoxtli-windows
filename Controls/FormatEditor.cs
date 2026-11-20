@@ -60,7 +60,7 @@ internal sealed class FormatEditor : Grid
     public FormatEditor(ReaderSettings settings, Func<string, bool, Task> openLink, Action<string> report)
     {
         _settings = settings; _openLink = openLink; _report = report;
-        Scroll = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _panel };
+        Scroll = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalContentAlignment = HorizontalAlignment.Stretch, Content = _panel };
         Children.Add(Scroll);
         FlowDirection = FlowDirection.LeftToRight;
         _palette = EditorPalette.For(ActualTheme);
@@ -417,30 +417,31 @@ internal sealed class FormatEditor : Grid
     {
         var cells = Enumerable.Range(block.First, block.Last - block.First + 1).ToList();
         int columns = cells.Max(i => _paragraphs[i].Column) + 1, rows = cells.Max(i => _paragraphs[i].Row) + 1;
-        // A rich edit box sized by an Auto column only reports its minimum width, and its text arrives
-        // after the first layout; star columns measure their cells narrower than they end up, which
-        // leaves rows too tall. Columns get fixed widths measured from their text (kept as MaxWidth),
-        // scaled down together when the table is wider than the space it has.
+        // Give RichEditBox a finite width at measure time, so its wrapped text has the correct height.
         var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
-        var host = new Border { Child = grid, Margin = new Thickness(0, 6, 0, 12), HorizontalAlignment = HorizontalAlignment.Stretch };
-        for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { MinWidth = TableColumnMinimum });
+        var host = new ScrollViewer
+        {
+            Content = grid,
+            Margin = new Thickness(0, 6, 0, 12),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Disabled
+        };
+        double readableWidth = Math.Max(TableColumnMinimum, 24 + 8 * _settings.FontSize);
+        for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition());
         for (int r = 0; r < rows; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var widths = new double[columns, rows];
         void Layout()
         {
-            // Columns that reach their minimum stop shrinking; the others share what is left.
-            double room = host.ActualWidth, scale = 1;
-            for (int pass = 0; pass < columns && room > 0; pass++)
-            {
-                double pinned = 0, flexible = 0;
-                foreach (var definition in grid.ColumnDefinitions)
-                    if (definition.MaxWidth * scale <= TableColumnMinimum) pinned += TableColumnMinimum; else flexible += definition.MaxWidth;
-                if (flexible == 0 || pinned + flexible * scale <= room) break;
-                scale = Math.Max(0, room - pinned) / flexible;
-            }
+            // Fit between the readable and unwrapped widths. If even the minima do not fit,
+            // the table scrolls horizontally instead of squeezing the text further.
+            double minimum = grid.ColumnDefinitions.Sum(column => column.MinWidth);
+            double flexible = grid.ColumnDefinitions.Sum(column => column.MaxWidth - column.MinWidth);
+            double scale = flexible > 0 ? Math.Clamp((host.ActualWidth - minimum) / flexible, 0, 1) : 0;
             foreach (var definition in grid.ColumnDefinitions)
             {
-                double width = Math.Floor(Math.Max(TableColumnMinimum, definition.MaxWidth * scale));
+                double width = definition.MinWidth + Math.Floor((definition.MaxWidth - definition.MinWidth) * scale);
                 if (definition.Width.Value != width || !definition.Width.IsAbsolute) definition.Width = new GridLength(width);
             }
         }
@@ -449,6 +450,7 @@ internal sealed class FormatEditor : Grid
             double natural = TableColumnMinimum;
             for (int r = 0; r < rows; r++) natural = Math.Max(natural, widths[column, r]);
             grid.ColumnDefinitions[column].MaxWidth = natural;
+            grid.ColumnDefinitions[column].MinWidth = Math.Min(natural, readableWidth);
         }
         // Rich edit can keep the line layout of text it wrapped before its font or final width arrived, and
         // report that height even after measuring again, which leaves rows too tall. Once the table has been
@@ -476,6 +478,7 @@ internal sealed class FormatEditor : Grid
             var p = _paragraphs[i];
             bool header = p.Row == 0;
             var field = NewField(block, i, false, header);
+            field.Box.MinWidth = 0;
             if (header) field.Box.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
             var alignment = p.Column < p.Alignments.Count ? p.Alignments[p.Column] : TableAlignment.None;
             field.KeepsAlignment = alignment != TableAlignment.None;
@@ -844,7 +847,7 @@ internal sealed class FormatEditor : Grid
             {
                 if (keyboard) field.Box.Focus(FocusState.Programmatic);
                 field.Select(caret);
-                field.Box.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false });
+                if (keyboard) field.Box.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false });
             });
             return;
         }

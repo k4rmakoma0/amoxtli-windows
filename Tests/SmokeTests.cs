@@ -65,6 +65,7 @@ public sealed partial class MainWindow
             var preferences = new ReadingPreferencesDialog(previewSettings);
             preferences.ThemePicker.SelectedIndex = 2;
             preferences.RemoteImages.IsOn = false;
+            preferences.RestoreRecentOnStartup.IsOn = false;
             preferences.TextSize.Value = 23;
             preferences.TypefacePicker.SelectedIndex = 1;
             preferences.DefaultAppPrompt.IsChecked = false;
@@ -78,14 +79,18 @@ public sealed partial class MainWindow
                     && preferences.PrimaryButtonText == DialogText("Save") && preferences.CloseButtonText == DialogText("Cancel")
                     && preferences.LanguagePicker.Header?.ToString() == DialogText("Language") && preferences.ThemePicker.Header?.ToString() == DialogText("Theme")
                     && preferences.RemoteImages.Header?.ToString() == DialogText("RemoteImages") && preferences.RemoteImages.OnContent?.ToString() == DialogText("On")
-                    && preferences.RemoteImages.OffContent?.ToString() == DialogText("Off") && preferences.TextSize.Header?.ToString() == DialogText("FontSize") && preferences.TypefacePicker.Header?.ToString() == DialogText("Typeface")
+                    && preferences.RemoteImages.OffContent?.ToString() == DialogText("Off")
+                    && preferences.RestoreRecentOnStartup.Header?.ToString() == DialogText("RestoreRecentOnStartup")
+                    && preferences.RestoreRecentOnStartup.OnContent?.ToString() == DialogText("On") && preferences.RestoreRecentOnStartup.OffContent?.ToString() == DialogText("Off")
+                    && preferences.TextSize.Header?.ToString() == DialogText("FontSize") && preferences.TypefacePicker.Header?.ToString() == DialogText("Typeface")
                     && (preferences.DefaultAppPrompt.Content as TextBlock)?.Text == DialogText("DefaultAppPrompt"));
                 Check($"Vista previa conserva opciones pendientes: {option.Code}", preferences.ThemePicker.SelectedIndex == 2 && !preferences.RemoteImages.IsOn
+                    && !preferences.RestoreRecentOnStartup.IsOn
                     && preferences.TextSize.Value == 22 && preferences.TypefacePicker.SelectedIndex == 1 && preferences.DefaultAppPrompt.IsChecked == false
                     && (preferences.LanguagePicker.SelectedItem as LanguageOption)?.Code == option.Code);
                 Check($"Vista previa no modifica app ni preferencias: {option.Code}", Localization.CurrentLanguage == appLanguage
                     && Root.Children.OfType<MenuBar>().First().Items[0].Title == appMenu
-                    && previewSettings is { Language: "es", Theme: "Light", RemoteImages: true, FontSize: 17, PromptForDefaultApp: true });
+                    && previewSettings is { Language: "es", Theme: "Light", RemoteImages: true, RestoreRecentOnStartup: true, FontSize: 17, PromptForDefaultApp: true });
                 Check($"Dirección de vista previa correcta: {option.Code}", preferences.FlowDirection == (option.Code == "ar" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight));
             }
             preferences.LanguagePicker.SelectedItem = ((IEnumerable<LanguageOption>)preferences.LanguagePicker.ItemsSource).First(item => item.Code == "auto");
@@ -96,12 +101,18 @@ public sealed partial class MainWindow
             var reopenedPreferences = new ReadingPreferencesDialog(previewSettings);
             Check("Descartar vista previa conserva preferencias originales", (reopenedPreferences.LanguagePicker.SelectedItem as LanguageOption)?.Code == "es"
                 && reopenedPreferences.ThemePicker.SelectedIndex == 1 && reopenedPreferences.RemoteImages.IsOn && reopenedPreferences.TextSize.Value == 17
+                && reopenedPreferences.RestoreRecentOnStartup.IsOn
                 && reopenedPreferences.DefaultAppPrompt.IsChecked == true && Localization.CurrentLanguage == appLanguage);
             preferences.LanguagePicker.SelectedItem = ((IEnumerable<LanguageOption>)preferences.LanguagePicker.ItemsSource).First(item => item.Code == "en");
             preferences.ApplyTo(previewSettings);
-            Check("Guardar aplica idioma y opciones de la vista previa", previewSettings is { Language: "en", Theme: "Dark", RemoteImages: false, FontSize: 22, Typeface: "Serif", PromptForDefaultApp: false });
+            Check("Guardar aplica idioma y opciones de la vista previa", previewSettings is { Language: "en", Theme: "Dark", RemoteImages: false,
+                RestoreRecentOnStartup: false, FontSize: 22, Typeface: "Serif", PromptForDefaultApp: false });
             var previousSettings = JsonSerializer.Deserialize<ReaderSettings>("{\"NavigationOpen\":false}");
             Check("Preferencias anteriores habilitan sugerencia de app predeterminada", previousSettings is { NavigationOpen: false, PromptForDefaultApp: true });
+            Check("Preferencias anteriores restauran el último elemento de forma predeterminada", previousSettings is { RestoreRecentOnStartup: true });
+            var savedPreview = JsonSerializer.Deserialize<ReaderSettings>(JsonSerializer.Serialize(previewSettings));
+            Check("La opción de restaurar desactivada se conserva al volver a abrir Preferencias", savedPreview is { RestoreRecentOnStartup: false }
+                && !new ReadingPreferencesDialog(savedPreview).RestoreRecentOnStartup.IsOn);
             var rememberedSettings = JsonSerializer.Deserialize<ReaderSettings>(JsonSerializer.Serialize(new ReaderSettings { PromptForDefaultApp = false }));
             Check("No volver a preguntar se conserva en preferencias", rememberedSettings is { PromptForDefaultApp: false });
             Check("Configuración sin identidad abre página general", DefaultAppService.GetSettingsUri(null).AbsoluteUri == "ms-settings:defaultapps");
@@ -203,6 +214,21 @@ public sealed partial class MainWindow
             var tableGrid = elements.OfType<Grid>().FirstOrDefault(g => g.ColumnDefinitions.Count == 2 && g.RowDefinitions.Count == 2 && g.Children.OfType<Border>().Count() == 4);
             Check("Celdas de tabla en columnas distintas", tableGrid is not null && tableGrid.Children.OfType<Border>().Count(b => Grid.GetColumn(b) == 1) == 2,
                 JsonSerializer.Serialize(elements.OfType<Grid>().Where(g => g.Children.OfType<Border>().Any()).Select(g => new { columns = g.ColumnDefinitions.Count, rows = g.RowDefinitions.Count, cells = g.Children.OfType<Border>().Select(b => new { column = Grid.GetColumn(b), span = Grid.GetColumnSpan(b) }) })));
+            if (tableGrid is not null && elements.OfType<ScrollViewer>().FirstOrDefault(scroll => ReferenceEquals(scroll.Content, tableGrid)) is { } tableScroll)
+            {
+                tableScroll.Width = 160;
+                DocumentPanel.UpdateLayout();
+                Check("La tabla de lectura conserva sus columnas al estrecharse", tableScroll.ScrollableWidth > 0
+                    && tableGrid.ColumnDefinitions.All(column => column.ActualWidth >= column.MinWidth - 1));
+                tableScroll.Width = 520;
+                DocumentPanel.UpdateLayout();
+                Check("La tabla de lectura se ensancha con el espacio disponible", tableScroll.ViewportWidth > 500
+                    && Math.Abs(tableGrid.ActualWidth - tableScroll.ViewportWidth) <= 1 && tableScroll.ScrollableWidth <= 1,
+                    $"Tabla {tableGrid.ActualWidth}, área visible {tableScroll.ViewportWidth}, desborde {tableScroll.ScrollableWidth}");
+                tableScroll.Width = double.NaN;
+                DocumentPanel.UpdateLayout();
+            }
+            else Check("Tabla de lectura desplazable", false);
             Check("HTML preservado como texto", elements.OfType<TextBlock>().Any(t => t.Text.Contains("<script>")));
             Check("Búsqueda en documento", _renderer.Search("definición").Count == 1);
             Check("Búsqueda sin distinción de mayúsculas", _renderer.Search("NEGRITA").Count == 1);

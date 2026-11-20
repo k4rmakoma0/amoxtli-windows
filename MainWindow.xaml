@@ -33,6 +33,7 @@
             <MenuBarItem services:LocalizedText.Text="MenuFile">
                 <MenuFlyoutItem services:LocalizedText.Text="OpenFile" Click="OpenFile_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="O" Modifiers="Control"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
                 <MenuFlyoutItem services:LocalizedText.Text="OpenFolder" Click="OpenFolder_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="O" Modifiers="Control,Shift"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
+                <MenuFlyoutSubItem x:Name="RecentMenu" services:LocalizedText.Text="OpenRecent"/>
                 <MenuFlyoutSeparator/>
                 <MenuFlyoutItem x:Name="SaveMenu" services:LocalizedText.Text="Save" Click="Save_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="S" Modifiers="Control"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>
                 <MenuFlyoutItem services:LocalizedText.Text="SaveAs" Click="SaveAs_Click"><MenuFlyoutItem.KeyboardAccelerators><KeyboardAccelerator Key="S" Modifiers="Control,Shift"/></MenuFlyoutItem.KeyboardAccelerators></MenuFlyoutItem>

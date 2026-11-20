@@ -10,6 +10,7 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
     internal ComboBox LanguagePicker { get; }
     internal ComboBox ThemePicker { get; }
     internal ToggleSwitch RemoteImages { get; }
+    internal ToggleSwitch RestoreRecentOnStartup { get; }
     internal ComboBox TypefacePicker { get; }
     internal Slider TextSize { get; }
     internal CheckBox DefaultAppPrompt { get; }
@@ -35,6 +36,7 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
             SelectedIndex = settings.Theme == "Light" ? 1 : settings.Theme == "Dark" ? 2 : 0
         };
         RemoteImages = new ToggleSwitch { IsOn = settings.RemoteImages };
+        RestoreRecentOnStartup = new ToggleSwitch { IsOn = settings.RestoreRecentOnStartup };
         TypefacePicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, SelectedIndex = Array.IndexOf(Typesetting.Typefaces, Typesetting.NormalizeTypeface(settings.Typeface)) };
         TextSize = new Slider { Minimum = Typesetting.Sizes[0], Maximum = Typesetting.Sizes[^1], StepFrequency = 1, Value = Typesetting.Snap(settings.FontSize) };
         // The slider moves along the size steps, not every pixel.
@@ -42,13 +44,20 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
         DefaultAppPrompt = new CheckBox { Content = _defaultAppText, IsChecked = settings.PromptForDefaultApp };
         var panel = new StackPanel { Spacing = 20, MinWidth = 320 };
         panel.Children.Add(LanguagePicker);
+        panel.Children.Add(RestoreRecentOnStartup);
         panel.Children.Add(RemoteImages);
         panel.Children.Add(_remoteImagesHelp);
         panel.Children.Add(ThemePicker);
         panel.Children.Add(TypefacePicker);
         panel.Children.Add(TextSize);
         panel.Children.Add(DefaultAppPrompt);
-        Content = panel;
+        Content = new ScrollViewer
+        {
+            Content = panel,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
         DefaultButton = ContentDialogButton.Primary;
         RefreshLanguage();
         LanguagePicker.SelectionChanged += (_, _) => RefreshLanguage();
@@ -82,6 +91,9 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
             ThemePicker.Header = Text("Theme");
             ThemePicker.ItemsSource = new[] { Text("SystemTheme"), Text("Light"), Text("Dark") };
             ThemePicker.SelectedIndex = themeIndex;
+            RestoreRecentOnStartup.Header = Text("RestoreRecentOnStartup");
+            RestoreRecentOnStartup.OnContent = Text("On");
+            RestoreRecentOnStartup.OffContent = Text("Off");
             RemoteImages.Header = Text("RemoteImages");
             RemoteImages.OnContent = Text("On");
             RemoteImages.OffContent = Text("Off");
@@ -101,6 +113,7 @@ internal sealed class ReadingPreferencesDialog : ContentDialog
         settings.Language = SelectedLanguage;
         settings.Theme = ThemePicker.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "Default" };
         settings.RemoteImages = RemoteImages.IsOn;
+        settings.RestoreRecentOnStartup = RestoreRecentOnStartup.IsOn;
         settings.FontSize = Typesetting.Snap(TextSize.Value);
         settings.Typeface = Typesetting.Typefaces[Math.Max(0, TypefacePicker.SelectedIndex)];
         settings.PromptForDefaultApp = DefaultAppPrompt.IsChecked == true;

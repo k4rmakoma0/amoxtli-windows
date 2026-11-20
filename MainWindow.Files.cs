@@ -22,6 +22,7 @@ public sealed partial class MainWindow
         _autosaveTimer.Interval = TimeSpan.FromSeconds(1);
         _autosaveTimer.IsRepeating = false;
         _autosaveTimer.Tick += async (_, _) => await AutosaveAsync();
+        RefreshRecentMenu();
         Activated += Window_Activated;
     }
 
@@ -29,8 +30,12 @@ public sealed partial class MainWindow
     private bool Autosaves(ReadingDocument? document) =>
         document is { Kind: DocumentKind.File, Path: { } path } && _folderExplicit && _folderPath is { } folder && IsInside(path, folder);
 
-    private static bool IsInside(string path, string folder) =>
-        System.IO.Path.GetFullPath(path).StartsWith(System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(folder)) + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    private static bool IsInside(string path, string folder)
+    {
+        string prefix = System.IO.Path.GetFullPath(folder);
+        if (!System.IO.Path.EndsInDirectorySeparator(prefix)) prefix += System.IO.Path.DirectorySeparatorChar;
+        return System.IO.Path.GetFullPath(path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>One second after the last edit.</summary>
     private void ScheduleAutosave()
@@ -51,7 +56,13 @@ public sealed partial class MainWindow
     {
         if (_closed) return;
         // Leaving the app saves, like switching files; coming back picks up changes made elsewhere.
-        if (args.WindowActivationState == WindowActivationState.Deactivated) { await AutosaveAsync(); return; }
+        if (args.WindowActivationState == WindowActivationState.Deactivated)
+        {
+            SaveRecentPosition();
+            await AutosaveAsync();
+            return;
+        }
+        RefreshRecentMenu();
         if (_document is { Kind: DocumentKind.File, Path: { } path } document && System.IO.File.Exists(path) && DocumentFile.Stamp(path) != document.Stamp)
             await ReloadCurrentAsync(true);
     }

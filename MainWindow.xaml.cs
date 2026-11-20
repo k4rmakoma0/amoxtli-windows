@@ -63,8 +63,11 @@ public sealed partial class MainWindow : Window
     private bool _closed;
     private bool _rendering;
 
-    public MainWindow()
+    public MainWindow() : this(RecentItems.ForCurrentUser()) { }
+
+    internal MainWindow(RecentItems recents)
     {
+        _recents = recents;
         InitializeComponent();
         InitializeEditing();
         ApplyLanguage();
@@ -131,7 +134,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) { Notify(Localization.Format("SaveSettingsError", ex.Message), InfoBarSeverity.Warning); }
     }
 
-    public async Task OpenFileAsync(string path)
+    public async Task<bool> OpenFileAsync(string path, bool standalone = false, bool reportError = true)
     {
         int revision = ++_openRevision;
         try
@@ -139,37 +142,80 @@ public sealed partial class MainWindow : Window
             path = System.IO.Path.GetFullPath(path);
             if (!MarkdownService.IsMarkdown(path)) throw new InvalidOperationException(Localization.Get("ChooseMarkdown"));
             // Opening the document already shown keeps its unsaved edits.
-            if (_document?.Kind == DocumentKind.File && string.Equals(_document.Path, path, StringComparison.OrdinalIgnoreCase) && _document.IsDirty) return;
-            var (source, format) = await DocumentFile.ReadAsync(path);
-            var parsed = await Task.Run(() => MarkdownService.Parse(source));
-            if (revision != _openRevision || _closed) return;
-            if (!await ConfirmLeaveAsync() || revision != _openRevision) return;
-            Navigate(new ReadingDocument(source, path, System.IO.Path.GetFileName(path), DocumentKind.File, format) { Stamp = DocumentFile.Stamp(path) }, parsed);
-            if (_folderPath is null) await OpenFolderAsync(System.IO.Path.GetDirectoryName(path)!, false, false);
+            if (!IsCurrentDirtyFile(path))
+            {
+                var (document, parsed) = await ReadDocumentAsync(path);
+                if (revision != _openRevision || _closed) return false;
+                if (!await ConfirmLeaveAsync() || revision != _openRevision || _closed) return false;
+                Navigate(document, parsed);
+            }
+            if (standalone) _folderExplicit = false;
+            RememberDocument(path);
+            string parent = System.IO.Path.GetDirectoryName(path)!;
+            if (_folderPath is null || (standalone && !string.Equals(_folderPath, parent, StringComparison.OrdinalIgnoreCase)))
+                await LoadFolderAsync(parent, false, false, reportError);
+            return true;
         }
-        catch (Exception ex) { if (revision == _openRevision) await ShowErrorAsync(Localization.Get("OpenFileError"), ex.Message); }
+        catch (Exception ex)
+        {
+            if (reportError && revision == _openRevision && !_closed)
+                await ShowErrorAsync(Localization.Get("OpenFileError"), ex.Message);
+            return false;
+        }
     }
 
-    public async Task OpenFolderAsync(string path, bool selectTab = true, bool chosen = true)
+    private bool IsCurrentDirtyFile(string path) => _document is { Kind: DocumentKind.File, IsDirty: true }
+        && string.Equals(_document.Path, path, StringComparison.OrdinalIgnoreCase);
+
+    private static async Task<(ReadingDocument Document, Markdig.Syntax.MarkdownDocument Parsed)> ReadDocumentAsync(string path)
+    {
+        var (source, format) = await DocumentFile.ReadAsync(path);
+        var parsed = await Task.Run(() => MarkdownService.Parse(source));
+        var document = new ReadingDocument(source, path, System.IO.Path.GetFileName(path), DocumentKind.File, format) { Stamp = DocumentFile.Stamp(path) };
+        return (document, parsed);
+    }
+
+    public async Task<bool> OpenFolderAsync(string path, bool selectTab = true)
+    {
+        int revision = ++_openRevision;
+        if (!await LoadFolderAsync(path, selectTab, true) || revision != _openRevision || _closed) return false;
+        RememberFolder(_folderPath!);
+        return true;
+    }
+
+    private async Task<bool> LoadFolderAsync(string path, bool selectTab, bool chosen, bool reportError = true)
     {
         int revision = ++_folderRevision;
+        int openRevision = _openRevision;
         try
         {
-            path = System.IO.Path.GetFullPath(path);
+            path = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(path));
             var entries = await Task.Run(() => ReadDirectory(path));
-            if (revision != _folderRevision || _closed) return;
-            _folderPath = path;
-            _folderExplicit = chosen;
-            FolderName.Text = System.IO.Path.GetFileName(path.TrimEnd(System.IO.Path.DirectorySeparatorChar));
-            if (string.IsNullOrEmpty(FolderName.Text)) FolderName.Text = path;
-            ToolTipService.SetToolTip(FolderName, path);
-            FileTree.RootNodes.Clear();
-            foreach (var item in entries) FileTree.RootNodes.Add(CreateNode(item));
-            FolderPrompt.Visibility = Visibility.Collapsed;
-            if (selectTab) { NavigationPivot.SelectedIndex = 0; NavigationSplit.IsPaneOpen = true; }
-            if (entries.Count == 0) Notify(Localization.Get("EmptyFolder"));
+            if (revision != _folderRevision || openRevision != _openRevision || _closed) return false;
+            if (chosen && !string.Equals(_folderPath, path, StringComparison.OrdinalIgnoreCase)) SaveRecentPosition();
+            ShowFolder(path, entries, selectTab, chosen);
+            return true;
         }
-        catch (Exception ex) { if (revision == _folderRevision) await ShowErrorAsync(Localization.Get("OpenFolderError"), ex.Message); }
+        catch (Exception ex)
+        {
+            if (reportError && revision == _folderRevision && openRevision == _openRevision && !_closed)
+                await ShowErrorAsync(Localization.Get("OpenFolderError"), ex.Message);
+            return false;
+        }
+    }
+
+    private void ShowFolder(string path, List<FileTreeItem> entries, bool selectTab, bool chosen)
+    {
+        _folderPath = path;
+        _folderExplicit = chosen;
+        FolderName.Text = System.IO.Path.GetFileName(path);
+        if (string.IsNullOrEmpty(FolderName.Text)) FolderName.Text = path;
+        ToolTipService.SetToolTip(FolderName, path);
+        FileTree.RootNodes.Clear();
+        foreach (var item in entries) FileTree.RootNodes.Add(CreateNode(item));
+        FolderPrompt.Visibility = Visibility.Collapsed;
+        if (selectTab) { NavigationPivot.SelectedIndex = 0; NavigationSplit.IsPaneOpen = true; }
+        if (entries.Count == 0) Notify(Localization.Get("EmptyFolder"));
     }
 
     private static List<FileTreeItem> ReadDirectory(string path)
@@ -265,6 +311,7 @@ public sealed partial class MainWindow : Window
 
     private void SaveScrollPosition()
     {
+        SaveRecentPosition();
         if (_historyIndex >= 0 && _historyIndex < _history.Count) _history[_historyIndex].Offset = ReaderScroll.VerticalOffset;
     }
 
@@ -278,6 +325,7 @@ public sealed partial class MainWindow : Window
         double offset = _history[index].Offset;
         RenderCurrent(false); WatchCurrentFile();
         if (_mode != EditorMode.Format) LoadEditor();
+        if (_document is { Kind: DocumentKind.File, Path: { } path }) RememberDocument(path);
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => ReaderScroll.ChangeView(null, offset, null, true));
     }
 
@@ -455,7 +503,7 @@ public sealed partial class MainWindow : Window
     private async void Reload_Click(object sender, RoutedEventArgs e)
     {
         await ReloadCurrentAsync(false);
-        if (_folderPath is not null) await OpenFolderAsync(_folderPath, false, _folderExplicit);
+        if (_folderPath is not null) await LoadFolderAsync(_folderPath, false, _folderExplicit);
     }
 
     private async void Reveal_Click(object sender, RoutedEventArgs e)
@@ -538,7 +586,11 @@ public sealed partial class MainWindow : Window
     private void Forward_Click(object sender, RoutedEventArgs e) => GoHistory(1);
     private void BackAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) { args.Handled = true; GoHistory(-1); }
     private void ForwardAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) { args.Handled = true; GoHistory(1); }
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void Close_Click(object sender, RoutedEventArgs e)
+    {
+        SaveRecentPosition();
+        Close();
+    }
     private void Sidebar_Click(object sender, RoutedEventArgs e) => SetSidebarOpen(SidebarMenu.IsChecked);
     private void SidebarToggle_Click(object sender, RoutedEventArgs e) => SetSidebarOpen(SidebarButton.IsChecked == true);
     private void SetSidebarOpen(bool open)
@@ -629,8 +681,24 @@ public sealed partial class MainWindow : Window
     {
         if (_dialogOpen) return;
         _dialogOpen = true;
-        try { await new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, FlowDirection = Root.FlowDirection, Title = "Amoxtli", Content = Localization.Get("AboutText"), CloseButtonText = Localization.Get("Close") }.ShowAsync(); }
+        try
+        {
+            await new ContentDialog
+            {
+                XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, FlowDirection = Root.FlowDirection,
+                Title = "Amoxtli", Content = Localization.Format("AboutText", GetAppVersion()), CloseButtonText = Localization.Get("Close")
+            }.ShowAsync();
+        }
         finally { _dialogOpen = false; }
+    }
+
+    private static string GetAppVersion()
+    {
+        if (DefaultAppService.GetCurrentAppId() is null)
+            return typeof(App).Assembly.GetName().Version!.ToString();
+
+        var version = Windows.ApplicationModel.Package.Current.Id.Version;
+        return $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
     }
 
     public Task ShowErrorAsync(string title, string message)

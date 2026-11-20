@@ -97,7 +97,18 @@ internal sealed class SplitScroll
     }
 
     /// <summary>Moves the other side to match <paramref name="leader"/>.</summary>
-    public void Follow(Side leader)
+    public void Follow(Side leader) => Follow(leader, null);
+
+    internal void RestoreFormatOffset(double offset)
+    {
+        _pointer = Side.Format;
+        _pointerTime = DateTime.UtcNow;
+        _expectedFormat = offset;
+        Follow(Side.Format, offset);
+        _format.Scroll.ChangeView(null, offset, null, true);
+    }
+
+    private void Follow(Side leader, double? offset)
     {
         HookSource();
         if (!Enabled || _sourceScroll is not { } source) return;
@@ -109,7 +120,7 @@ internal sealed class SplitScroll
         }
         else
         {
-            _expectedSource = Math.Clamp(map.Backward(_format.Scroll.VerticalOffset), 0, source.ScrollableHeight);
+            _expectedSource = Math.Clamp(map.Backward(offset ?? _format.Scroll.VerticalOffset), 0, source.ScrollableHeight);
             source.ChangeView(null, _expectedSource, null, true);
         }
     }

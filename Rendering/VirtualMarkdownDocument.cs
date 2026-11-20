@@ -4,6 +4,7 @@ using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Amoxtli.Services;
 
 namespace Amoxtli.Rendering;
@@ -11,10 +12,11 @@ namespace Amoxtli.Rendering;
 // Keep the complete Markdown model/search index, but materialize native text only near the viewport.
 internal sealed class VirtualMarkdownDocument : IDisposable
 {
-    private sealed class Entry(Block block, int index)
+    private sealed class Entry(Block block, int index, int sourceOffset)
     {
         public Block? Block { get; set; } = block;
         public int Index { get; } = index;
+        public int SourceOffset { get; } = sourceOffset;
         public Border Element { get; } = new();
         public List<string> SearchText { get; } = [];
         public NativeMarkdownRenderer? Renderer { get; set; }
@@ -34,6 +36,7 @@ internal sealed class VirtualMarkdownDocument : IDisposable
     }
 
     private readonly List<Entry> _entries = [];
+    private readonly StackPanel _host;
     private readonly Dictionary<FrameworkElement, Entry> _byElement = [];
     private readonly Dictionary<FrameworkElement, (Entry Entry, int Match)> _searchTargets = [];
     private readonly Dictionary<string, FrameworkElement> _anchors = new(StringComparer.OrdinalIgnoreCase);
@@ -45,10 +48,14 @@ internal sealed class VirtualMarkdownDocument : IDisposable
 
     public VirtualMarkdownDocument(StackPanel host, MarkdownDocument document, Func<StackPanel, NativeMarkdownRenderer> createRenderer)
     {
+        _host = host;
         _createRenderer = createRenderer;
+        int lastOffset = -1;
         foreach (var block in document)
         {
-            var entry = new Entry(block, _entries.Count);
+            int offset = block.Span.Start > lastOffset ? block.Span.Start : -1;
+            if (offset >= 0) lastOffset = offset;
+            var entry = new Entry(block, _entries.Count, offset);
             IndexBlock(block, entry, 0);
             _entries.Add(entry);
             _byElement.Add(entry.Element, entry);
@@ -154,6 +161,26 @@ internal sealed class VirtualMarkdownDocument : IDisposable
         if (!_anchors.TryGetValue(id, out var element)) return null;
         PrepareForNavigation(element);
         return _byElement[element].Renderer?.ResolveAnchor(id) ?? element;
+    }
+
+    internal (int Offset, double Top)? PositionAt(double verticalOffset) =>
+        NativeMarkdownRenderer.FindPosition(RealizedPositionBlocks(), _host, verticalOffset);
+
+    private IEnumerable<(int Offset, FrameworkElement Element)> RealizedPositionBlocks()
+    {
+        for (int index = 0; index < VisualTreeHelper.GetChildrenCount(_repeater); index++)
+            if (VisualTreeHelper.GetChild(_repeater, index) is FrameworkElement element
+                && _byElement.TryGetValue(element, out var entry) && entry.SourceOffset >= 0 && entry.Renderer is not null)
+                yield return (entry.SourceOffset, element);
+    }
+
+    internal double? TopAt(int sourceOffset)
+    {
+        if (_disposed || _host.XamlRoot is null || sourceOffset < 0
+            || _entries.Find(entry => entry.SourceOffset == sourceOffset) is not { } entry) return null;
+        PrepareForNavigation(entry.Element);
+        _host.UpdateLayout();
+        return NativeMarkdownRenderer.MeasuredTop(entry.Element, _host);
     }
 
     public void Dispose()

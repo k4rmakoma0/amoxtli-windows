@@ -41,6 +41,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 5 }) { Timeout = TimeSpan.FromSeconds(20) };
     private readonly List<(FrameworkElement Element, string Text)> _searchable = [];
     private readonly Dictionary<string, FrameworkElement> _anchors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(int Offset, FrameworkElement Element)> _positionBlocks = [];
     private readonly List<(RichTextBlock Text, List<(Hyperlink Link, string Url)> Links)> _links = [];
     private readonly double _font;
     private readonly FontFamily _family;
@@ -76,19 +77,63 @@ public sealed class NativeMarkdownRenderer : IDisposable
     public void Render(MarkdownDocument document)
     {
         _host.Children.Clear();
+        _positionBlocks.Clear();
         if (document.Count > 300 || document.Sum(block => (long)Math.Max(0, block.Span.End - block.Span.Start + 1)) > 512 * 1024)
         {
             _virtualDocument = new VirtualMarkdownDocument(_host, document,
                 panel => new NativeMarkdownRenderer(panel, _settings, _path, _openLink, _report, _imageSlots));
             return;
         }
-        foreach (var block in document) AddBlock(_host, block, 0);
+        int lastOffset = -1;
+        foreach (var block in document)
+        {
+            int first = _host.Children.Count;
+            AddBlock(_host, block, 0);
+            if (block.Span.Start > lastOffset && _host.Children.Count > first
+                && _host.Children[first] is FrameworkElement element)
+            {
+                lastOffset = block.Span.Start;
+                _positionBlocks.Add((lastOffset, element));
+            }
+        }
     }
 
     internal void RenderBlock(MdBlock block) => AddBlock(_host, block, 0);
     public FrameworkElement PrepareForNavigation(FrameworkElement element) => _virtualDocument?.PrepareForNavigation(element) ?? element;
     public FrameworkElement? ResolveAnchor(string id) => _virtualDocument is not null ? _virtualDocument.ResolveAnchor(id)
         : _anchors.GetValueOrDefault(id);
+
+    internal (int Offset, double Top)? PositionAt(double verticalOffset) => _virtualDocument is { } virtualDocument
+        ? virtualDocument.PositionAt(verticalOffset) : FindPosition(_positionBlocks, _host, verticalOffset);
+
+    internal double? TopAt(int sourceOffset)
+    {
+        if (_virtualDocument is { } virtualDocument) return virtualDocument.TopAt(sourceOffset);
+        foreach (var (offset, element) in _positionBlocks)
+            if (offset == sourceOffset) return MeasuredTop(element, _host);
+        return null;
+    }
+
+    internal static (int Offset, double Top)? FindPosition(IEnumerable<(int Offset, FrameworkElement Element)> blocks,
+        FrameworkElement host, double verticalOffset)
+    {
+        (int Offset, double Top)? position = null;
+        foreach (var (offset, element) in blocks)
+            if (MeasuredTop(element, host) is { } top && top <= verticalOffset && (position is null || top > position.Value.Top))
+                position = (offset, top);
+        return position;
+    }
+
+    internal static double? MeasuredTop(FrameworkElement element, FrameworkElement host)
+    {
+        if (element.XamlRoot is null || element.Visibility != Visibility.Visible || element.ActualHeight <= 0) return null;
+        try
+        {
+            double top = element.TransformToVisual(host).TransformPoint(new Point()).Y;
+            return double.IsFinite(top) ? top : null;
+        }
+        catch (ArgumentException) { return null; }
+    }
 
     private void AddBlock(StackPanel target, MdBlock block, int depth)
     {
@@ -352,9 +397,11 @@ public sealed class NativeMarkdownRenderer : IDisposable
 
     private FrameworkElement RenderTable(Table table, int depth)
     {
-        var grid = new Grid { MinWidth = 360 };
         int columns = Math.Max(1, table.OfType<TableRow>().Select(row => row.OfType<TableCell>().Sum(cell => Math.Max(1, cell.ColumnSpan))).DefaultIfEmpty(1).Max());
-        for (int column = 0; column < columns; column++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 110 });
+        double columnMinimum = Math.Max(110, 5 * _font + 24);
+        double tableMinimum = columns * columnMinimum;
+        var grid = new Grid { Width = tableMinimum };
+        for (int column = 0; column < columns; column++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = columnMinimum });
         int rowIndex = 0;
         foreach (var row in table.OfType<TableRow>())
         {
@@ -388,7 +435,22 @@ public sealed class NativeMarkdownRenderer : IDisposable
             }
             rowIndex++;
         }
-        return new Border { Child = new ScrollViewer { Content = grid, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, BorderBrush = _tableLine, BorderThickness = new Thickness(1, 1, 0, 0), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 8, 0, 18) };
+        var scroll = new ScrollViewer
+        {
+            Content = grid,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        // A horizontal scroll viewer measures content without a width constraint. Give star columns
+        // a finite width for wrapping while keeping wide tables scrollable.
+        scroll.SizeChanged += (_, args) =>
+        {
+            double viewport = args.NewSize.Width;
+            if (double.IsFinite(viewport) && viewport > 0 && viewport != args.PreviousSize.Width)
+                grid.Width = Math.Max(tableMinimum, viewport);
+        };
+        return new Border { Child = scroll, BorderBrush = _tableLine, BorderThickness = new Thickness(1, 1, 0, 0), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 8, 0, 18) };
     }
 
     private FrameworkElement Image(LinkInline imageLink)
@@ -535,6 +597,7 @@ public sealed class NativeMarkdownRenderer : IDisposable
         _host.Children.Clear();
         _searchable.Clear();
         _anchors.Clear();
+        _positionBlocks.Clear();
         _links.Clear();
         _lifetime.Dispose();
     }

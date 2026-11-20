@@ -198,12 +198,14 @@ public sealed partial class MainWindow
         var wideCell = (Border)VisualTreeHelper.GetParent(wide.Box);
         var table = (Grid)VisualTreeHelper.GetParent(wideCell);
         double natural0 = table.ColumnDefinitions[0].MaxWidth, natural1 = table.ColumnDefinitions[1].MaxWidth;
-        double room = ((FrameworkElement)VisualTreeHelper.GetParent(table)).ActualWidth;
-        // With room, a column gets its natural width; without, the columns shrink together to fit.
-        double expected0 = natural0 + natural1 <= room ? natural0 : room - Math.Max(72, Math.Floor(natural1 * room / (natural0 + natural1)));
+        ScrollViewer TableScroll() => ((StackPanel)_formatEditor.Scroll.Content).Children.OfType<Grid>()
+            .SelectMany(block => block.Children.OfType<ScrollViewer>()).Single();
+        var tableScroll = TableScroll();
+        double room = tableScroll.ViewportWidth;
         Check("La columna cabe su texto", natural0 >= FormatEditor.CellWidth("Buscar en el documento", wide.Box, wideCell.Padding) - .5
-            && Math.Abs(table.ColumnDefinitions[0].ActualWidth - expected0) <= 2 && table.ActualWidth <= room + .5,
-            $"natural {natural0}, esperado {expected0}, real {table.ColumnDefinitions[0].ActualWidth}, tabla {table.ActualWidth}, espacio {room}");
+            && (natural0 + natural1 > room || Math.Abs(table.ColumnDefinitions[0].ActualWidth - natural0) <= 2)
+            && table.ActualWidth <= Math.Max(room, table.ColumnDefinitions.Sum(column => column.MinWidth)) + 1,
+            $"natural {natural0}, real {table.ColumnDefinitions[0].ActualWidth}, tabla {table.ActualWidth}, espacio {room}");
         Check("Una columna corta no se estira", natural1 < natural0 && table.ColumnDefinitions[1].ActualWidth <= natural1 + .5, $"{natural1} {table.ColumnDefinitions[1].ActualWidth}");
         await Task.Delay(500);
         double CellHeight(string text) => ((Border)VisualTreeHelper.GetParent(_formatEditor.Fields.First(f => f.ReadText() == text).Box)).ActualHeight;
@@ -228,6 +230,29 @@ public sealed partial class MainWindow
         table = (Grid)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(shortcut.Box));
         Check("La columna crece al escribir", table.ColumnDefinitions[1].MaxWidth > natural1 + 100, $"{natural1} → {table.ColumnDefinitions[1].MaxWidth}");
         if (_document is { IsDirty: true } edited) UpdateDocument(edited with { Source = edited.Saved });
+
+        const string results = """
+            | Estado o respuesta | Acción en la aplicación |
+            | --- | --- |
+            | completed | Mostrar un mensaje de confirmación y actualizar la vista. |
+            | pending con `next_action: request_confirmation` | Ofrecer «Continuar la verificación» y abrir el enlace en una nueva ventana. |
+            | pending, processing o unknown sin una acción disponible | Mostrar «Pendiente de confirmación» y ofrecer «Revisar de nuevo» cuando se restablezca la conexión. |
+            """;
+        Navigate(new ReadingDocument(results, null, "Resultados"), MarkdownService.Parse(results));
+        _formatEditor.Width = 880;
+        await Task.Delay(400);
+        tableScroll = TableScroll();
+        table = (Grid)tableScroll.Content;
+        double expectedWidth = Math.Min(tableScroll.ViewportWidth, table.ColumnDefinitions.Sum(column => column.MaxWidth));
+        Check("Una tabla de texto largo ocupa el ancho disponible", table.ColumnDefinitions.All(column => column.ActualWidth > 200)
+            && Math.Abs(table.ActualWidth - expectedWidth) <= 2 && tableScroll.ScrollableWidth <= 1,
+            $"Tabla {table.ActualWidth}, área visible {tableScroll.ViewportWidth}");
+        _formatEditor.Width = 200;
+        await Task.Delay(400);
+        Check("En un panel estrecho la tabla se desplaza sin comprimir las columnas", tableScroll.ScrollableWidth > 1
+            && table.ColumnDefinitions.All(column => column.ActualWidth >= column.MinWidth - 1),
+            $"Tabla {table.ActualWidth}, área visible {tableScroll.ViewportWidth}, desborde {tableScroll.ScrollableWidth}");
+        _formatEditor.Width = double.NaN;
 
         // Each paragraph reads in the direction of its first letter.
         Check("Dirección por la primera letra", TextDirection.FirstStrong("مرحبًا Amoxtli") == true && TextDirection.FirstStrong("Amoxtli مرحبًا") == false

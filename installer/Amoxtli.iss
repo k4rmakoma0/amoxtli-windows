@@ -7,11 +7,12 @@
 #ifndef ReleaseDirectory
   #error ReleaseDirectory is required
 #endif
+#define WindowsVersion AppVersion + ".0"
 
 [Setup]
 AppId={{D834F23E-61E5-4E02-8CB0-2DE1593AD3C7}
 AppName=Amoxtli
-AppVersion={#AppVersion}
+AppVersion={#WindowsVersion}
 AppPublisher=Alan Anaya
 AppPublisherURL=https://amoxtli.alananaya.dev/
 AppSupportURL=https://github.com/k4rmakoma0/amoxtli-windows/issues
@@ -35,10 +36,13 @@ CloseApplications=yes
 RestartApplications=no
 DisableProgramGroupPage=yes
 VersionInfoProductName=Amoxtli
-VersionInfoProductVersion={#AppVersion}
+VersionInfoVersion={#WindowsVersion}
 #ifdef ExternalSigning
+VersionInfoProductVersion={#AppVersion}
 SignedUninstaller=yes
 SignedUninstallerDir={#SignedUninstallerDirectory}
+#else
+VersionInfoProductVersion={#WindowsVersion}
 #endif
 
 [Languages]

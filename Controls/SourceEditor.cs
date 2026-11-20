@@ -193,6 +193,20 @@ internal sealed class SourceEditor : Grid
         return rect.Y / _rectUnits;
     }
 
+    internal (int Offset, double Top) LineAt(double verticalOffset)
+    {
+        CalibrateUnits();
+        int first = 0, last = _highlighter.LineCount - 1;
+        while (first < last)
+        {
+            int line = first + (last - first + 1) / 2;
+            if (TopOf(_highlighter.LineStart(line)) <= verticalOffset) first = line;
+            else last = line - 1;
+        }
+        int offset = _highlighter.LineStart(first);
+        return (offset, TopOf(offset));
+    }
+
     /// <summary>
     /// Rich text reports rectangles in effective pixels in a shown window but in physical pixels in some others
     /// (a hidden one): compare the end of the text with the scroll extent to tell which. Measuring the end also
